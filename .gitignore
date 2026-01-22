@@ -23,6 +23,9 @@ data/
 uploads/
 static/wallpapers/*.jpg
 
+# Internal Docs
+docs/RELEASE_WORKFLOW_zh-CN.md
+
 # OS specific
 .DS_Store
 Thumbs.db
