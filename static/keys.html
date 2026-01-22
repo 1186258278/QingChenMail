@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>密钥管理 - 晴辰云邮</title>
+    <link href="/dashboard/css/tailwind.min.css?v=8.0" rel="stylesheet">
+    <script src="/dashboard/js/common.js?v=8.0"></script>
+    <script src="/dashboard/js/layout.js?v=8.0"></script>
+</head>
+<body class="hidden" data-i18n-module="keys">
+    <div class="mb-8 flex justify-between items-center">
+        <div>
+            <h2 class="text-3xl font-bold text-gray-800" data-i18n="keys.title">密钥管理</h2>
+            <p class="text-gray-500 mt-1" data-i18n="keys.subtitle">管理 API 访问密钥 (API Keys)</p>
+        </div>
+        <button onclick="openModal()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition shadow-sm flex items-center">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+            <span data-i18n="keys.add_btn">生成新密钥</span>
+        </button>
+    </div>
+
+    <!-- 列表 -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <table class="w-full text-left">
+            <thead class="bg-gray-50 text-gray-500 text-xs uppercase font-semibold">
+                <tr>
+                    <th class="px-6 py-4" data-i18n="keys.table.name">备注名称</th>
+                    <th class="px-6 py-4" data-i18n="keys.table.key">API Key</th>
+                    <th class="px-6 py-4" data-i18n="keys.table.last_used">最后使用</th>
+                    <th class="px-6 py-4 text-right" data-i18n="keys.table.created_at">创建时间</th>
+                    <th class="px-6 py-4 text-right" data-i18n="keys.table.actions">操作</th>
+                </tr>
+            </thead>
+            <tbody id="key-list" class="divide-y divide-gray-100 text-sm text-gray-700">
+                <!-- JS 渲染 -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 模态框 -->
+    <div id="key-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl p-8 w-[500px] shadow-2xl">
+            <h3 class="font-bold text-xl mb-4 text-gray-800" data-i18n="keys.modal.title">生成新密钥</h3>
+            <form onsubmit="createKey(event)">
+                <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="keys.modal.name_label">备注名称</label>
+                <input type="text" id="key-name" required data-i18n-attr="placeholder:keys.modal.name_ph" placeholder="例如: 博客系统集成" class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none mb-6">
+                <div class="flex justify-end space-x-3">
+                    <button type="button" onclick="closeModal()" class="px-5 py-2 text-gray-500 hover:bg-gray-100 rounded-lg transition" data-i18n="common.cancel">取消</button>
+                    <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md transition" data-i18n="keys.modal.create_btn">生成</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        Auth.check();
+
+        function openModal() { document.getElementById('key-modal').classList.remove('hidden'); document.getElementById('key-name').value = ''; }
+        function closeModal() { document.getElementById('key-modal').classList.add('hidden'); }
+
+        async function loadKeys() {
+            try {
+                const list = await request('/keys');
+                const tbody = document.getElementById('key-list');
+                tbody.innerHTML = '';
+
+                if (list.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="5" class="px-6 py-12 text-center text-gray-400"><span data-i18n="keys.table.empty">暂无密钥</span></td></tr>`;
+                    if (typeof I18n !== 'undefined' && I18n.isReady) I18n.render();
+                    return;
+                }
+
+                list.forEach(k => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-gray-50 transition';
+                    
+                    const lastUsed = k.last_used 
+                        ? Utils.formatDate(k.last_used)
+                        : `<span data-i18n="keys.table.never_used">从未</span>`;
+
+                    tr.innerHTML = `
+                        <td class="px-6 py-4 font-medium text-gray-900">${Utils.escapeHtml(k.name)}</td>
+                        <td class="px-6 py-4 font-mono text-gray-600 select-all copy-text cursor-pointer" data-i18n-attr="title:keys.action.copy_title" title="点击复制">${k.key}</td>
+                        <td class="px-6 py-4 text-gray-500 text-xs">${lastUsed}</td>
+                        <td class="px-6 py-4 text-right text-gray-400 font-mono text-xs">${Utils.formatDate(k.created_at)}</td>
+                        <td class="px-6 py-4 text-right">
+                            <button onclick="deleteKey(${k.id})" class="text-red-500 hover:text-red-700 font-medium text-sm" data-i18n="keys.action.delete">删除</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+                
+                if (typeof I18n !== 'undefined' && I18n.isReady) I18n.render();
+            } catch (e) {}
+        }
+
+        async function createKey(e) {
+            e.preventDefault();
+            const name = document.getElementById('key-name').value;
+            try {
+                await request('/keys', { method: 'POST', body: JSON.stringify({ name }) });
+                closeModal();
+                loadKeys();
+                showToast(I18n.t('keys.toast.success'));
+            } catch (err) {}
+        }
+
+        async function deleteKey(id) {
+            if (confirm(I18n.t('keys.alert.delete_confirm'))) {
+                try {
+                    await request(`/keys/${id}`, { method: 'DELETE' });
+                    loadKeys();
+                    showToast(I18n.t('common.deleted'));
+                } catch (e) {}
+            }
+        }
+
+        loadKeys();
+    </script>
+</body>
+</html>

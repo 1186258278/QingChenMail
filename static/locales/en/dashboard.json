@@ -1,0 +1,10 @@
+{
+    "dashboard.title": "Dashboard",
+    "dashboard.subtitle": "Real-time system overview",
+    "dashboard.today_sent": "Sent Today",
+    "dashboard.success_rate": "Success Rate",
+    "dashboard.failure_count": "Failed",
+    "dashboard.total_sent": "Total Sent",
+    "dashboard.trend_title": "Sending Trend",
+    "dashboard.chart_label": "Emails Sent"
+}

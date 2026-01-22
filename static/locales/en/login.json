@@ -1,0 +1,12 @@
+{
+    "login.title": "Admin Login",
+    "login.subtitle": "QingChen Mail System",
+    "login.username": "Username",
+    "login.username_ph": "Enter username",
+    "login.password": "Password",
+    "login.password_ph": "Enter password",
+    "login.captcha": "Captcha",
+    "login.captcha_ph": "Click to refresh",
+    "login.btn": "Sign In",
+    "login.footer": "&copy; 2026 QingChen Cloud."
+}

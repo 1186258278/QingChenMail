@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>使用指南 - 晴辰云邮</title>
+    <link href="/dashboard/css/tailwind.min.css?v=8.0" rel="stylesheet">
+    <script src="/dashboard/js/common.js?v=8.0"></script>
+    <script src="/dashboard/js/layout.js?v=8.0"></script>
+</head>
+<body class="hidden" data-i18n-module="guide">
+    <div class="mb-8">
+        <h2 class="text-3xl font-bold text-gray-800" data-i18n="guide.title">使用指南</h2>
+        <p class="text-gray-500 mt-1" data-i18n="guide.subtitle">快速上手 GoEmail Pro 系统</p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 w-full">
+        <!-- 步骤指南 -->
+        <div class="space-y-8">
+            <div class="relative pl-8 border-l-2 border-blue-200">
+                <div class="absolute -left-2.5 top-0 w-5 h-5 bg-blue-600 rounded-full border-4 border-white shadow-sm"></div>
+                <h3 class="font-bold text-lg text-gray-900 mb-2" data-i18n="guide.step1.title">1. 配置发送通道</h3>
+                <div class="text-gray-600 mb-4 text-sm">
+                    <p data-i18n="guide.step1.desc">首先，您需要配置一个 SMTP 发送通道。GoEmail 支持两种模式：</p>
+                    <ul class="list-disc list-inside mt-2 space-y-1">
+                        <li><strong data-i18n="guide.step1.direct">Direct Send (内置)</strong>: <span data-i18n="guide.step1.direct_desc">直接通过本机 25 端口投递，适合有独立 IP 的服务器。</span></li>
+                        <li><strong data-i18n="guide.step1.relay">SMTP 中继</strong>: <span data-i18n="guide.step1.relay_desc">使用 Gmail, Outlook, AWS SES, 阿里云 DM 等第三方服务（推荐）。</span></li>
+                    </ul>
+                </div>
+                <a href="/dashboard/smtp.html" class="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800" data-i18n="guide.step1.btn">
+                    前往配置通道 &rarr;
+                </a>
+            </div>
+
+            <div class="relative pl-8 border-l-2 border-blue-200">
+                <div class="absolute -left-2.5 top-0 w-5 h-5 bg-blue-600 rounded-full border-4 border-white shadow-sm"></div>
+                <h3 class="font-bold text-lg text-gray-900 mb-2" data-i18n="guide.step2.title">2. 添加发信域名</h3>
+                <div class="text-gray-600 mb-4 text-sm">
+                    <p data-i18n="guide.step2.desc">为了提高送达率，您需要配置 SPF, DKIM 和 DMARC 记录。</p>
+                    <ul class="list-disc list-inside mt-2 space-y-1">
+                        <li data-i18n="guide.step2.li1">在“域名管理”中添加您的域名（如 example.com）。</li>
+                        <li data-i18n="guide.step2.li2">根据生成的 DNS 记录，前往您的域名服务商（Cloudflare, GoDaddy 等）添加 TXT 记录。</li>
+                        <li data-i18n="guide.step2.li3">点击“验证”按钮确认配置生效。</li>
+                    </ul>
+                </div>
+                <a href="/dashboard/domains.html" class="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800" data-i18n="guide.step2.btn">
+                    前往管理域名 &rarr;
+                </a>
+            </div>
+
+            <div class="relative pl-8 border-l-2 border-blue-200">
+                <div class="absolute -left-2.5 top-0 w-5 h-5 bg-blue-600 rounded-full border-4 border-white shadow-sm"></div>
+                <h3 class="font-bold text-lg text-gray-900 mb-2" data-i18n="guide.step3.title">3. 管理联系人</h3>
+                <div class="text-gray-600 mb-4 text-sm">
+                    <p data-i18n="guide.step3.desc">建立您的客户数据库。</p>
+                    <ul class="list-disc list-inside mt-2 space-y-1">
+                        <li data-i18n="guide.step3.li1">创建分组（如“订阅用户”）。</li>
+                        <li data-i18n="guide.step3.li2">批量导入联系人 (CSV/文本)。</li>
+                    </ul>
+                </div>
+                <a href="/dashboard/contacts.html" class="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800" data-i18n="guide.step3.btn">
+                    前往联系人 &rarr;
+                </a>
+            </div>
+
+            <div class="relative pl-8 border-l-2 border-blue-200">
+                <div class="absolute -left-2.5 top-0 w-5 h-5 bg-blue-600 rounded-full border-4 border-white shadow-sm"></div>
+                <h3 class="font-bold text-lg text-gray-900 mb-2" data-i18n="guide.step4.title">4. 创建邮件模板</h3>
+                <div class="text-gray-600 mb-4 text-sm">
+                    <p data-i18n="guide.step4.desc">设计精美的营销邮件。</p>
+                    <ul class="list-disc list-inside mt-2 space-y-1">
+                        <li data-i18n="guide.step4.li1">支持 HTML 源码编辑。</li>
+                        <li data-i18n="guide.step4.li2">支持变量替换，例如 <code class="bg-gray-100 px-1 rounded">{name}</code>。</li>
+                    </ul>
+                </div>
+                <a href="/dashboard/templates.html" class="inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-800" data-i18n="guide.step4.btn">
+                    前往邮件模板 &rarr;
+                </a>
+            </div>
+
+            <div class="relative pl-8 border-l-2 border-transparent">
+                <div class="absolute -left-2.5 top-0 w-5 h-5 bg-green-500 rounded-full border-4 border-white shadow-sm"></div>
+                <h3 class="font-bold text-lg text-gray-900 mb-2" data-i18n="guide.step5.title">5. 创建营销任务</h3>
+                <p class="text-gray-600 mb-4 text-sm" data-i18n="guide.step5.desc">
+                    选择受众和模板，开始您的营销活动。系统将自动处理队列和发送。
+                </p>
+                <a href="/dashboard/campaigns.html" class="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow-sm transition" data-i18n="guide.step5.btn">
+                    创建任务
+                </a>
+            </div>
+        </div>
+
+        <!-- FAQ 卡片 -->
+        <div class="space-y-6">
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="font-bold text-gray-800 mb-4 flex items-center">
+                    <svg class="w-5 h-5 text-yellow-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <span data-i18n="guide.faq.title">常见问题</span>
+                </h3>
+                <div class="space-y-4">
+                    <details class="group">
+                        <summary class="flex justify-between items-center font-medium cursor-pointer list-none">
+                            <span data-i18n="guide.faq.q1">邮件进入垃圾箱怎么办？</span>
+                            <span class="transition group-open:rotate-180">
+                                <svg fill="none" height="24" shape-rendering="geometricPrecision" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewBox="0 0 24 24" width="24"><path d="M6 9l6 6 6-6"></path></svg>
+                            </span>
+                        </summary>
+                        <p class="text-gray-600 mt-3 group-open:animate-fadeIn text-sm leading-relaxed" data-i18n="guide.faq.a1">
+                            1. 检查 SPF/DKIM 是否验证通过。<br>
+                            2. 避免在邮件主题中使用过多感叹号或敏感词（如“免费”、“中奖”）。<br>
+                            3. 尽量使用信誉良好的 SMTP 中继服务。
+                        </p>
+                    </details>
+                    <details class="group">
+                        <summary class="flex justify-between items-center font-medium cursor-pointer list-none">
+                            <span data-i18n="guide.faq.q2">Direct Send 发送失败？</span>
+                            <span class="transition group-open:rotate-180">
+                                <svg fill="none" height="24" shape-rendering="geometricPrecision" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewBox="0 0 24 24" width="24"><path d="M6 9l6 6 6-6"></path></svg>
+                            </span>
+                        </summary>
+                        <p class="text-gray-600 mt-3 group-open:animate-fadeIn text-sm leading-relaxed" data-i18n="guide.faq.a2">
+                            许多云服务器（如阿里云 ECS、腾讯云 CVM）默认封禁了出方向的 25 端口。如果是这种情况，您必须使用 SMTP 中继服务（使用 465 或 587 端口）。
+                        </p>
+                    </details>
+                    <details class="group">
+                        <summary class="flex justify-between items-center font-medium cursor-pointer list-none">
+                            <span data-i18n="guide.faq.q3">如何接收回复邮件？</span>
+                            <span class="transition group-open:rotate-180">
+                                <svg fill="none" height="24" shape-rendering="geometricPrecision" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewBox="0 0 24 24" width="24"><path d="M6 9l6 6 6-6"></path></svg>
+                            </span>
+                        </summary>
+                        <p class="text-gray-600 mt-3 group-open:animate-fadeIn text-sm leading-relaxed" data-i18n="guide.faq.a3">
+                            要接收邮件，您需要：<br>
+                            1. 在 DNS 中添加指向服务器公网 IP 的 MX 记录。<br>
+                            2. 确保防火墙开放了 25 端口。<br>
+                            3. 如果 GoEmail 监听非 25 端口（如 2525），请使用 iptables 将 25 端口流量转发到 2525。<br>
+                            4. 在“域名管理”中添加该域名的转发规则。
+                        </p>
+                    </details>
+                    <details class="group">
+                        <summary class="flex justify-between items-center font-medium cursor-pointer list-none">
+                            <span data-i18n="guide.faq.q4">STARTTLS 是什么？</span>
+                            <span class="transition group-open:rotate-180">
+                                <svg fill="none" height="24" shape-rendering="geometricPrecision" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" viewBox="0 0 24 24" width="24"><path d="M6 9l6 6 6-6"></path></svg>
+                            </span>
+                        </summary>
+                        <p class="text-gray-600 mt-3 group-open:animate-fadeIn text-sm leading-relaxed" data-i18n="guide.faq.a4">
+                            STARTTLS 允许将不安全的明文连接升级为加密连接 (SSL/TLS)。<br>
+                            启用它可以防止邮件内容被窃听，并提高对 Gmail 等服务商的投递信誉。<br>
+                            您需要在“系统设置”中配置有效的 SSL 证书才能启用此功能。
+                        </p>
+                    </details>
+                </div>
+            </div>
+
+            <div class="bg-gray-50 rounded-xl p-6 border border-gray-200">
+                <h4 class="font-bold text-gray-800 mb-2" data-i18n="guide.advanced.title">进阶配置：端口转发</h4>
+                <p class="text-gray-600 text-sm mb-4" data-i18n="guide.advanced.desc">如果无法直接监听 25 端口，可以使用以下方法将 25 端口流量转发到 2525（GoEmail 监听端口）。</p>
+                
+                <div class="space-y-4">
+                    <div>
+                        <p class="text-xs font-bold text-gray-700 mb-1">iptables (Linux)</p>
+                        <pre class="bg-gray-800 text-gray-300 p-2 rounded text-xs overflow-x-auto">iptables -t nat -A PREROUTING -p tcp --dport 25 -j REDIRECT --to-port 2525</pre>
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold text-gray-700 mb-1">Nginx Stream (需安装 stream 模块)</p>
+                        <pre class="bg-gray-800 text-gray-300 p-2 rounded text-xs overflow-x-auto">stream {
+    server {
+        listen 25;
+        proxy_pass 127.0.0.1:2525;
+    }
+}</pre>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-blue-50 rounded-xl p-6 border border-blue-100">
+                <h4 class="font-bold text-blue-800 mb-2" data-i18n="guide.help.title">需要更多帮助？</h4>
+                <p class="text-blue-600 text-sm mb-4" data-i18n="guide.help.desc">如果您在使用过程中遇到任何技术问题，请查阅我们的 GitHub Wiki 或提交 Issue。</p>
+                <a href="https://github.com/goemail-pro" target="_blank" class="text-sm font-bold text-blue-700 hover:underline" data-i18n="guide.help.btn">访问 GitHub 仓库 &rarr;</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        Auth.check();
+    </script>
+</body>
+</html>

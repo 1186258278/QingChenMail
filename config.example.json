@@ -1,0 +1,11 @@
+{
+  "domain": "example.com",
+  "dkim_selector": "default",
+  "dkim_private_key": "",
+  "host": "0.0.0.0",
+  "port": "9901",
+  "enable_ssl": false,
+  "cert_file": "",
+  "key_file": "",
+  "jwt_secret": "change-this-secret"
+}

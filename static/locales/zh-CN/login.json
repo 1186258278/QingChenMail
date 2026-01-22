@@ -1,0 +1,12 @@
+{
+    "login.title": "管理员登录",
+    "login.subtitle": "QingChen Mail System",
+    "login.username": "用户名",
+    "login.username_ph": "请输入用户名",
+    "login.password": "密码",
+    "login.password_ph": "请输入密码",
+    "login.captcha": "验证码",
+    "login.captcha_ph": "点击刷新",
+    "login.btn": "登 录",
+    "login.footer": "&copy; 2026 QingChen Cloud."
+}

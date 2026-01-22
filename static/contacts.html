@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>联系人管理 - 晴辰云邮</title>
+    <link href="/dashboard/css/tailwind.min.css?v=8.0" rel="stylesheet">
+    <script src="/dashboard/js/common.js?v=8.0"></script>
+    <script src="/dashboard/js/layout.js?v=8.0"></script>
+</head>
+<body class="hidden" data-i18n-module="contacts">
+    <div class="mb-8 flex justify-between items-center">
+        <div>
+            <h2 class="text-3xl font-bold text-gray-800" data-i18n="contacts.title">联系人管理</h2>
+            <p class="text-gray-500 mt-1" data-i18n="contacts.subtitle">管理您的客户列表和订阅者</p>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-12 gap-6 h-[calc(100vh-200px)]">
+        <!-- 分组列表 -->
+        <div class="col-span-3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-full">
+            <div class="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl">
+                <h3 class="font-bold text-gray-700" data-i18n="contacts.groups.title">分组</h3>
+                <button onclick="openGroupModal()" class="text-blue-600 hover:text-blue-800">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                </button>
+            </div>
+            <div id="group-list" class="flex-1 overflow-y-auto p-2 space-y-1">
+                <!-- 动态生成 -->
+            </div>
+        </div>
+
+        <!-- 联系人列表 -->
+        <div class="col-span-9 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-full">
+            <!-- 工具栏 -->
+            <div class="p-4 border-b border-gray-100 flex justify-between items-center">
+                <div class="flex items-center space-x-3">
+                    <h3 id="current-group-name" class="font-bold text-xl text-gray-800">所有联系人</h3>
+                    <span id="current-group-count" class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs">0</span>
+                </div>
+                <div class="flex items-center space-x-3">
+                    <div class="relative">
+                        <input type="text" id="search-input" data-i18n-attr="placeholder:common.search_ph" placeholder="搜索邮箱或姓名..." 
+                            class="w-64 border rounded-lg pl-9 pr-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                            onkeydown="if(event.key==='Enter') loadContacts()">
+                        <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+                    <button onclick="openImportModal()" class="bg-white border border-gray-300 text-gray-700 px-4 py-1.5 rounded-lg hover:bg-gray-50 transition text-sm flex items-center shadow-sm">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                        <span data-i18n="contacts.action.import">导入</span>
+                    </button>
+                    <button onclick="openContactModal()" class="bg-blue-600 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700 transition text-sm flex items-center shadow-sm">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                        <span data-i18n="contacts.action.add">添加联系人</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 表格 -->
+            <div class="flex-1 overflow-auto relative">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-gray-50 sticky top-0 z-10">
+                        <tr>
+                            <th class="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider" data-i18n="contacts.table.email">邮箱</th>
+                            <th class="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider" data-i18n="contacts.table.name">姓名</th>
+                            <th class="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider" data-i18n="contacts.table.status">状态</th>
+                            <th class="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right" data-i18n="common.actions">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="contact-list" class="divide-y divide-gray-100">
+                        <!-- 动态生成 -->
+                    </tbody>
+                </table>
+                <div id="loading-mask" class="absolute inset-0 bg-white bg-opacity-70 flex items-center justify-center hidden z-20">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+            </div>
+
+            <!-- 分页 -->
+            <div class="p-3 border-t border-gray-100 flex justify-between items-center bg-gray-50 rounded-b-xl">
+                <span class="text-xs text-gray-500" id="pagination-info"></span>
+                <div class="flex space-x-2">
+                    <button id="prev-btn" onclick="changePage(-1)" class="px-3 py-1 bg-white border rounded hover:bg-gray-50 text-sm disabled:opacity-50" data-i18n="common.prev">上一页</button>
+                    <button id="next-btn" onclick="changePage(1)" class="px-3 py-1 bg-white border rounded hover:bg-gray-50 text-sm disabled:opacity-50" data-i18n="common.next">下一页</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 分组模态框 -->
+    <div id="group-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl p-6 w-[400px] shadow-2xl">
+            <h3 class="font-bold text-xl mb-4 text-gray-800" data-i18n="contacts.groups.modal_title">分组管理</h3>
+            <form onsubmit="saveGroup(event)">
+                <input type="hidden" id="group-id">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="contacts.groups.name">分组名称</label>
+                    <input type="text" id="group-name" required class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="contacts.groups.desc">描述</label>
+                    <textarea id="group-desc" class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none" rows="3"></textarea>
+                </div>
+                <div class="flex justify-end space-x-3">
+                    <button type="button" onclick="closeGroupModal()" class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg" data-i18n="common.cancel">取消</button>
+                    <button type="submit" class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm" data-i18n="common.save">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 联系人模态框 -->
+    <div id="contact-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl p-6 w-[400px] shadow-2xl">
+            <h3 class="font-bold text-xl mb-4 text-gray-800" data-i18n="contacts.modal.add_title">添加联系人</h3>
+            <form onsubmit="saveContact(event)">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="contacts.table.email">邮箱</label>
+                    <input type="email" id="contact-email" required class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="contacts.table.name">姓名</label>
+                    <input type="text" id="contact-name" class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div class="flex justify-end space-x-3">
+                    <button type="button" onclick="closeContactModal()" class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg" data-i18n="common.cancel">取消</button>
+                    <button type="submit" class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm" data-i18n="common.save">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 导入模态框 -->
+    <div id="import-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl p-6 w-[500px] shadow-2xl">
+            <h3 class="font-bold text-xl mb-4 text-gray-800" data-i18n="contacts.import.title">批量导入</h3>
+            <div class="bg-blue-50 text-blue-700 text-sm p-3 rounded mb-4">
+                <p data-i18n="contacts.import.hint">格式：每行一个，"邮箱,姓名"。例如：test@example.com,张三</p>
+            </div>
+            <form onsubmit="importContacts(event)">
+                <div class="mb-6">
+                    <textarea id="import-data" required class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm" rows="10" placeholder="user1@example.com,User One&#10;user2@example.com,User Two"></textarea>
+                </div>
+                <div class="flex justify-end space-x-3">
+                    <button type="button" onclick="closeImportModal()" class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg" data-i18n="common.cancel">取消</button>
+                    <button type="submit" id="import-btn" class="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm" data-i18n="contacts.action.import">开始导入</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        Auth.check();
+
+        let currentGroupId = null;
+        let currentPage = 1;
+        let pageSize = 20;
+
+        // Group Logic
+        async function loadGroups() {
+            try {
+                const groups = await request('/contacts/groups');
+                const list = document.getElementById('group-list');
+                list.innerHTML = '';
+                
+                if (groups.length > 0) {
+                    if (!currentGroupId) {
+                        currentGroupId = groups[0].id; // Default select first
+                        updateHeader(groups[0]);
+                    }
+
+                    groups.forEach(g => {
+                        const div = document.createElement('div');
+                        div.className = `p-3 rounded-lg cursor-pointer flex justify-between items-center group transition ${currentGroupId === g.id ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'hover:bg-gray-50 text-gray-700'}`;
+                        div.onclick = () => selectGroup(g);
+                        div.innerHTML = `
+                            <div class="flex flex-col truncate">
+                                <span class="font-medium truncate">${g.name}</span>
+                                <span class="text-xs ${currentGroupId === g.id ? 'text-blue-500' : 'text-gray-400'} truncate">${g.description || ''}</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-xs bg-white bg-opacity-50 px-2 py-0.5 rounded-full border border-gray-200">${g.count}</span>
+                                <button onclick="editGroup(event, ${g.id}, '${g.name}', '${g.description||''}')" class="p-1 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>
+                                <button onclick="deleteGroup(event, ${g.id})" class="p-1 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                            </div>
+                        `;
+                        list.appendChild(div);
+                    });
+                } else {
+                    list.innerHTML = `<div class="text-center text-gray-400 text-sm py-4" data-i18n="contacts.groups.empty">暂无分组</div>`;
+                    currentGroupId = null;
+                    document.getElementById('current-group-name').innerText = I18n.t('contacts.groups.empty_select');
+                }
+
+                loadContacts();
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function selectGroup(group) {
+            currentGroupId = group.id;
+            updateHeader(group);
+            loadGroups(); // refresh styles
+        }
+
+        function updateHeader(group) {
+            document.getElementById('current-group-name').innerText = group.name;
+            document.getElementById('current-group-count').innerText = group.count;
+        }
+
+        function openGroupModal() {
+            document.getElementById('group-modal').classList.remove('hidden');
+            document.getElementById('group-id').value = '';
+            document.getElementById('group-name').value = '';
+            document.getElementById('group-desc').value = '';
+        }
+
+        function editGroup(e, id, name, desc) {
+            e.stopPropagation();
+            document.getElementById('group-modal').classList.remove('hidden');
+            document.getElementById('group-id').value = id;
+            document.getElementById('group-name').value = name;
+            document.getElementById('group-desc').value = desc;
+        }
+
+        function closeGroupModal() {
+            document.getElementById('group-modal').classList.add('hidden');
+        }
+
+        async function saveGroup(e) {
+            e.preventDefault();
+            const id = document.getElementById('group-id').value;
+            const data = {
+                name: document.getElementById('group-name').value,
+                description: document.getElementById('group-desc').value
+            };
+
+            try {
+                if (id) {
+                    await request(`/contacts/groups/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+                } else {
+                    await request('/contacts/groups', { method: 'POST', body: JSON.stringify(data) });
+                }
+                closeGroupModal();
+                loadGroups();
+                showToast(I18n.t('common.success'));
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        async function deleteGroup(e, id) {
+            e.stopPropagation();
+            if (!confirm(I18n.t('contacts.alert.delete_group'))) return;
+            try {
+                await request(`/contacts/groups/${id}`, { method: 'DELETE' });
+                if (currentGroupId === id) currentGroupId = null;
+                loadGroups();
+                showToast(I18n.t('common.deleted'));
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        // Contact Logic
+        async function loadContacts() {
+            if (!currentGroupId) {
+                document.getElementById('contact-list').innerHTML = `<tr><td colspan="4" class="text-center py-8 text-gray-400" data-i18n="contacts.groups.select_hint">请先选择分组</td></tr>`;
+                if (typeof I18n !== 'undefined' && I18n.isReady) I18n.render();
+                return;
+            }
+
+            const mask = document.getElementById('loading-mask');
+            mask.classList.remove('hidden');
+
+            const keyword = document.getElementById('search-input').value;
+
+            try {
+                const res = await request(`/contacts?group_id=${currentGroupId}&page=${currentPage}&page_size=${pageSize}&keyword=${keyword}`);
+                const tbody = document.getElementById('contact-list');
+                tbody.innerHTML = '';
+
+                if (res.data.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="4" class="text-center py-8 text-gray-400" data-i18n="common.no_data">无数据</td></tr>`;
+                } else {
+                    res.data.forEach(c => {
+                        const tr = document.createElement('tr');
+                        tr.className = 'hover:bg-gray-50 transition border-b border-gray-100 last:border-0';
+                        tr.innerHTML = `
+                            <td class="p-4 font-mono text-sm text-gray-700">${c.email}</td>
+                            <td class="p-4 text-sm text-gray-600">${c.name || '-'}</td>
+                            <td class="p-4"><span class="px-2 py-0.5 rounded text-xs bg-green-100 text-green-700">${c.status}</span></td>
+                            <td class="p-4 text-right">
+                                <button onclick="deleteContact(${c.id})" class="text-red-500 hover:text-red-700 text-sm" data-i18n="common.delete">删除</button>
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                }
+
+                // Update pagination
+                document.getElementById('pagination-info').innerText = I18n.t('common.pagination', {
+                    current: currentPage,
+                    total: Math.ceil(res.total / pageSize) || 1,
+                    count: res.total
+                });
+                document.getElementById('prev-btn').disabled = currentPage <= 1;
+                document.getElementById('next-btn').disabled = currentPage >= Math.ceil(res.total / pageSize);
+
+                // Update group count locally if no search
+                if (!keyword) {
+                    document.getElementById('current-group-count').innerText = res.total;
+                }
+
+                if (typeof I18n !== 'undefined' && I18n.isReady) I18n.render();
+
+            } catch (e) {
+                console.error(e);
+            } finally {
+                mask.classList.add('hidden');
+            }
+        }
+
+        function changePage(delta) {
+            currentPage += delta;
+            loadContacts();
+        }
+
+        function openContactModal() {
+            if (!currentGroupId) {
+                showToast(I18n.t('contacts.groups.select_hint'), 'error');
+                return;
+            }
+            document.getElementById('contact-modal').classList.remove('hidden');
+            document.getElementById('contact-email').value = '';
+            document.getElementById('contact-name').value = '';
+        }
+
+        function closeContactModal() {
+            document.getElementById('contact-modal').classList.add('hidden');
+        }
+
+        async function saveContact(e) {
+            e.preventDefault();
+            const data = {
+                group_id: currentGroupId,
+                email: document.getElementById('contact-email').value,
+                name: document.getElementById('contact-name').value
+            };
+
+            try {
+                await request('/contacts', { method: 'POST', body: JSON.stringify(data) });
+                closeContactModal();
+                loadContacts();
+                loadGroups(); // update count
+                showToast(I18n.t('common.success'));
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        function openImportModal() {
+            if (!currentGroupId) {
+                showToast(I18n.t('contacts.groups.select_hint'), 'error');
+                return;
+            }
+            document.getElementById('import-modal').classList.remove('hidden');
+            document.getElementById('import-data').value = '';
+        }
+
+        function closeImportModal() {
+            document.getElementById('import-modal').classList.add('hidden');
+        }
+
+        async function importContacts(e) {
+            e.preventDefault();
+            const btn = document.getElementById('import-btn');
+            const originalText = btn.innerText;
+            btn.innerText = I18n.t('common.processing');
+            btn.disabled = true;
+
+            const data = {
+                group_id: currentGroupId,
+                data: document.getElementById('import-data').value
+            };
+
+            try {
+                const res = await request('/contacts/import', { method: 'POST', body: JSON.stringify(data) });
+                closeImportModal();
+                loadContacts();
+                loadGroups(); // update count
+                showToast(res.message);
+            } catch (e) {
+                showToast(e.message, 'error');
+            } finally {
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        async function deleteContact(id) {
+            if (!confirm(I18n.t('common.confirm_delete'))) return;
+            try {
+                await request(`/contacts/${id}`, { method: 'DELETE' });
+                loadContacts();
+                loadGroups(); // update count
+                showToast(I18n.t('common.deleted'));
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        loadGroups();
+    </script>
+</body>
+</html>

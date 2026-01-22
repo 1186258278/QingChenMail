@@ -1,0 +1,20 @@
+{
+    "keys.title": "API Keys",
+    "keys.subtitle": "Manage API access keys",
+    "keys.add_btn": "Generate Key",
+    "keys.table.name": "Name",
+    "keys.table.key": "API Key",
+    "keys.table.last_used": "Last Used",
+    "keys.table.created_at": "Created At",
+    "keys.table.actions": "Actions",
+    "keys.table.empty": "No keys found",
+    "keys.table.never_used": "Never",
+    "keys.action.delete": "Delete",
+    "keys.action.copy_title": "Click to copy",
+    "keys.modal.title": "Generate New Key",
+    "keys.modal.name_label": "Name",
+    "keys.modal.name_ph": "e.g. Blog Integration",
+    "keys.modal.create_btn": "Generate",
+    "keys.toast.success": "Key generated",
+    "keys.alert.delete_confirm": "Deleting this key will revoke access for integrations using it. Continue?"
+}

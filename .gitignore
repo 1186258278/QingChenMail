@@ -1,0 +1,37 @@
+# Binaries
+goemail
+goemail.exe
+goemail-linux-amd64
+*.exe
+*.dll
+*.so
+*.dylib
+*.old
+
+# Database (Sensitive Data!)
+goemail.db
+goemail.db-journal
+
+# Configuration (Sensitive Data!)
+config.json
+# Allow example config
+!config.example.json
+
+# Logs and Uploads
+logs/
+data/
+uploads/
+static/wallpapers/*.jpg
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# IDE specific
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Go dependencies
+vendor/

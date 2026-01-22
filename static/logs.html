@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>发送日志 - 晴辰云邮</title>
+    <link href="/dashboard/css/tailwind.min.css?v=8.0" rel="stylesheet">
+    <script src="/dashboard/js/common.js?v=8.0"></script>
+    <script src="/dashboard/js/layout.js?v=8.0"></script>
+</head>
+<body class="hidden" data-i18n-module="logs">
+    <div class="mb-8">
+        <h2 class="text-3xl font-bold text-gray-800" data-i18n="logs.title">发送日志</h2>
+        <p class="text-gray-500 mt-1" data-i18n="logs.subtitle">查看所有邮件投递记录与详情</p>
+    </div>
+
+    <!-- 列表 -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <table class="w-full text-left">
+            <thead class="bg-gray-50 text-gray-500 text-xs uppercase font-semibold">
+                <tr>
+                    <th class="px-6 py-4" data-i18n="logs.table.status">状态</th>
+                    <th class="px-6 py-4" data-i18n="logs.table.time">发送时间</th>
+                    <th class="px-6 py-4" data-i18n="logs.table.recipient">收件人</th>
+                    <th class="px-6 py-4" data-i18n="logs.table.subject">主题</th>
+                    <th class="px-6 py-4" data-i18n="logs.table.channel">发送通道</th>
+                    <th class="px-6 py-4 text-right" data-i18n="logs.table.actions">操作</th>
+                </tr>
+            </thead>
+            <tbody id="logs-list" class="divide-y divide-gray-100 text-sm text-gray-700">
+                <!-- JS 渲染 -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 详情侧边栏 (Offcanvas) -->
+    <div id="detail-drawer" class="fixed inset-y-0 right-0 w-[600px] bg-white shadow-2xl transform translate-x-full transition-transform duration-300 z-50 flex flex-col">
+        <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+            <h3 class="text-lg font-bold text-gray-800" data-i18n="logs.drawer.title">邮件详情</h3>
+            <button onclick="closeDrawer()" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <div class="p-6 flex-1 overflow-y-auto space-y-6" id="detail-content">
+            <!-- 详情内容 -->
+        </div>
+        <!-- 底部操作栏 -->
+        <div class="p-4 border-t border-gray-100 bg-gray-50 flex justify-end">
+            <button onclick="resendEmail()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition flex items-center">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                <span data-i18n="logs.drawer.resend_btn">重新发送</span>
+            </button>
+        </div>
+    </div>
+    <!-- 遮罩 -->
+    <div id="drawer-overlay" onclick="closeDrawer()" class="fixed inset-0 bg-black bg-opacity-20 hidden z-40"></div>
+
+    <script>
+        Auth.check();
+
+        let logList = []; // 全局列表
+        let currentLogId = null; // 当前查看的日志ID
+
+        async function loadLogs() {
+            try {
+                const list = await request('/logs');
+                logList = list;
+                const tbody = document.getElementById('logs-list');
+                tbody.innerHTML = '';
+
+                list.forEach(log => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-gray-50 transition cursor-pointer';
+                    tr.onclick = (e) => {
+                        if(e.target.tagName === 'BUTTON') return;
+                        showDetail(log.id);
+                    };
+
+                    const statusBadge = log.status === 'success' 
+                        ? `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800" data-i18n="logs.status.success">成功</span>`
+                        : `<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800" data-i18n="logs.status.fail">失败</span>`;
+
+                    tr.innerHTML = `
+                        <td class="px-6 py-4">${statusBadge}</td>
+                        <td class="px-6 py-4 text-gray-500 font-mono text-xs">${Utils.formatDate(log.created_at)}</td>
+                        <td class="px-6 py-4 font-medium text-gray-900">${Utils.escapeHtml(log.recipient)}</td>
+                        <td class="px-6 py-4 text-gray-600 truncate max-w-xs">${Utils.escapeHtml(log.subject)}</td>
+                        <td class="px-6 py-4 text-gray-500 text-xs">${log.channel || 'Direct'}</td>
+                        <td class="px-6 py-4 text-right">
+                            <button onclick="showDetail(${log.id})" class="text-blue-600 hover:text-blue-800 text-sm font-medium" data-i18n="logs.action.detail">详情</button>
+                            <span class="text-gray-300 mx-2">|</span>
+                            <button onclick="quickResend(${log.id}, event)" class="text-gray-500 hover:text-blue-600 text-sm" data-i18n="logs.action.resend">重发</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (e) {}
+        }
+
+        function showDetail(id) {
+            currentLogId = id;
+            const log = logList.find(item => item.id === id);
+            if (!log) return;
+
+            const content = document.getElementById('detail-content');
+
+            const errorSection = log.status !== 'success' ? `
+                <div class="bg-red-50 border-l-4 border-red-500 p-4 rounded mb-6">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/></svg>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-red-800" data-i18n="logs.drawer.error_title">发送失败原因</h3>
+                            <div class="mt-2 text-sm text-red-700 font-mono break-all">${Utils.escapeHtml(log.error_msg)}</div>
+                        </div>
+                    </div>
+                </div>` : '';
+
+            let bodyDisplay = `<span class="text-gray-400 italic" data-i18n="logs.drawer.no_content">无内容</span>`;
+            if (log.body) {
+                bodyDisplay = `<iframe class="w-full h-64 border rounded bg-gray-50" srcdoc="${Utils.escapeHtml(log.body).replace(/"/g, '"')}"></iframe>`;
+                if (log.body.includes('<') && log.body.includes('>')) {
+                     bodyDisplay = `<div class="p-4 bg-gray-50 border rounded text-sm overflow-auto max-h-96">${log.body}</div>`; 
+                } else {
+                     bodyDisplay = `<div class="p-4 bg-gray-50 border rounded text-sm font-mono whitespace-pre-wrap">${Utils.escapeHtml(log.body)}</div>`;
+                }
+            }
+
+            content.innerHTML = `
+                ${errorSection}
+                
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div>
+                        <label class="text-xs font-bold text-gray-500 uppercase tracking-wide" data-i18n="logs.drawer.id">ID</label>
+                        <p class="font-mono text-sm">${log.id}</p>
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-gray-500 uppercase tracking-wide" data-i18n="logs.drawer.time">发送时间</label>
+                        <p class="text-gray-900">${Utils.formatDate(log.created_at)}</p>
+                    </div>
+                    <div class="col-span-2">
+                        <label class="text-xs font-bold text-gray-500 uppercase tracking-wide" data-i18n="logs.drawer.recipient">收件人</label>
+                        <p class="text-gray-900 font-medium font-mono">${Utils.escapeHtml(log.recipient)}</p>
+                    </div>
+                    <div class="col-span-2">
+                        <label class="text-xs font-bold text-gray-500 uppercase tracking-wide" data-i18n="logs.drawer.subject">主题</label>
+                        <p class="text-gray-900 font-medium text-lg">${Utils.escapeHtml(log.subject)}</p>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 block" data-i18n="logs.drawer.body">邮件内容</label>
+                    ${bodyDisplay}
+                </div>
+            `;
+            
+            if (typeof I18n !== 'undefined' && I18n.isReady) I18n.render();
+
+            document.getElementById('detail-drawer').classList.remove('translate-x-full');
+            document.getElementById('drawer-overlay').classList.remove('hidden');
+        }
+
+        function closeDrawer() {
+            document.getElementById('detail-drawer').classList.add('translate-x-full');
+            document.getElementById('drawer-overlay').classList.add('hidden');
+        }
+
+        // 详情页内的重发按钮
+        async function resendEmail() {
+            if (!currentLogId) return;
+            doResend(currentLogId);
+        }
+
+        // 列表页的快速重发
+        async function quickResend(id, event) {
+            event.stopPropagation();
+            if (!confirm(I18n.t('logs.alert.resend_confirm'))) return;
+            doResend(id);
+        }
+
+        async function doResend(id) {
+            const log = logList.find(item => item.id === id);
+            if (!log) return showToast(I18n.t('logs.toast.not_found'), 'error');
+
+            try {
+                await request('/send', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        to: log.recipient,
+                        subject: log.subject,
+                        body: log.body, 
+                    })
+                });
+                showToast(I18n.t('logs.toast.queued'));
+                closeDrawer();
+                setTimeout(loadLogs, 1000); 
+            } catch (err) {
+                showToast(err.message || I18n.t('logs.toast.resend_fail'), 'error');
+            }
+        }
+
+        loadLogs();
+    </script>
+</body>
+</html>

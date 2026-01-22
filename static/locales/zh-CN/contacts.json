@@ -1,0 +1,20 @@
+{
+    "contacts.title": "联系人管理",
+    "contacts.subtitle": "管理您的客户列表和订阅者",
+    "contacts.groups.title": "分组",
+    "contacts.groups.empty": "暂无分组",
+    "contacts.groups.empty_select": "请选择分组",
+    "contacts.groups.modal_title": "分组管理",
+    "contacts.groups.name": "分组名称",
+    "contacts.groups.desc": "描述",
+    "contacts.groups.select_hint": "请先选择分组",
+    "contacts.table.email": "邮箱",
+    "contacts.table.name": "姓名",
+    "contacts.table.status": "状态",
+    "contacts.modal.add_title": "添加联系人",
+    "contacts.import.title": "批量导入",
+    "contacts.import.hint": "格式：每行一个，\"邮箱,姓名\"。例如：test@example.com,张三",
+    "contacts.action.add": "添加联系人",
+    "contacts.action.import": "导入",
+    "contacts.alert.delete_group": "确定要删除该分组吗？组内必须没有联系人才能删除。"
+}

@@ -1,0 +1,10 @@
+{
+    "dashboard.title": "仪表盘",
+    "dashboard.subtitle": "系统实时运行概览",
+    "dashboard.today_sent": "今日发送",
+    "dashboard.success_rate": "成功率",
+    "dashboard.failure_count": "发送失败",
+    "dashboard.total_sent": "历史总量",
+    "dashboard.trend_title": "发送趋势",
+    "dashboard.chart_label": "发送量"
+}

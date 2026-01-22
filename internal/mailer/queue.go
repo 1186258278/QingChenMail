@@ -1,0 +1,137 @@
+package mailer
+
+import (
+	"encoding/json"
+	"fmt"
+	"log"
+	"time"
+
+	"goemail/internal/database"
+)
+
+const (
+	MaxRetries    = 3
+	RetryInterval = 5 * time.Minute // 简单策略：失败后5分钟重试
+	WorkerPool    = 5               // 并发 Worker 数量
+)
+
+// SendEmailAsync 将邮件请求加入队列
+func SendEmailAsync(req SendRequest) (uint, error) {
+	// 序列化附件
+	attachmentsJSON, err := json.Marshal(req.Attachments)
+	if err != nil {
+		return 0, fmt.Errorf("failed to marshal attachments: %v", err)
+	}
+
+	task := database.EmailQueue{
+		From:        req.From,
+		To:          req.To,
+		Subject:     req.Subject,
+		Body:        req.Body,
+		Attachments: string(attachmentsJSON),
+		ChannelID:   req.ChannelID,
+		Status:      "pending",
+		Retries:     0,
+		NextRetry:   time.Now(),
+		TrackingID:  req.TrackingID, // [新增]
+	}
+
+	if err := database.DB.Create(&task).Error; err != nil {
+		return 0, err
+	}
+	return task.ID, nil
+}
+
+// StartQueueWorker 启动后台队列处理器
+func StartQueueWorker() {
+	log.Println("Starting Email Queue Worker...")
+	
+	// 使用 Ticker 定期轮询
+	// 生产环境可能需要更复杂的触发机制（如 Channel 通知），但对于此规模，轮询足够
+	ticker := time.NewTicker(2 * time.Second)
+	
+	go func() {
+		for range ticker.C {
+			processQueue()
+		}
+	}()
+}
+
+func processQueue() {
+	var tasks []database.EmailQueue
+	
+	// 查找待处理任务：Pending 或 Failed 且到达重试时间
+	// 注意：并发安全问题。如果是多实例部署，这里需要锁或状态更新的原子性。
+	// 单实例部署下，简单的 Update 锁定即可。
+	// 这里简化处理：一次取出一批，并在内存中分发给 Worker
+	
+	now := time.Now()
+	err := database.DB.Where(
+		"(status = 'pending') OR (status = 'failed' AND retries < ? AND next_retry <= ?)", 
+		MaxRetries, now,
+	).Limit(WorkerPool).Find(&tasks).Error
+
+	if err != nil {
+		log.Printf("Error fetching queue tasks: %v", err)
+		return
+	}
+
+	if len(tasks) == 0 {
+		return
+	}
+
+	for _, task := range tasks {
+		// 立即标记为处理中，防止其他 Worker (如果有) 重复获取
+		// 实际上单实例下这里是顺序的，但在循环中更新状态是个好习惯
+		database.DB.Model(&task).Update("status", "processing")
+		
+		go func(t database.EmailQueue) {
+			if err := executeTask(t); err != nil {
+				// 失败处理
+				newRetries := t.Retries + 1
+				status := "failed"
+				if newRetries >= MaxRetries {
+					// 超过重试次数，永久失败
+					status = "dead" // 或者 keep as failed but max retries reached
+				}
+				
+				database.DB.Model(&t).Updates(map[string]interface{}{
+					"status":     status,
+					"retries":    newRetries,
+					"next_retry": time.Now().Add(RetryInterval * time.Duration(newRetries)), // 指数退避示例
+					"error_msg":  err.Error(),
+				})
+			} else {
+				// 成功
+				database.DB.Model(&t).Updates(map[string]interface{}{
+					"status":    "completed",
+					"error_msg": "",
+				})
+			}
+		}(task)
+	}
+}
+
+func executeTask(task database.EmailQueue) error {
+	// 反序列化附件
+	var attachments []Attachment
+	if task.Attachments != "" {
+		if err := json.Unmarshal([]byte(task.Attachments), &attachments); err != nil {
+			return fmt.Errorf("failed to unmarshal attachments: %v", err)
+		}
+	}
+
+	req := SendRequest{
+		From:        task.From,
+		To:          task.To,
+		Subject:     task.Subject,
+		Body:        task.Body,
+		Attachments: attachments,
+		ChannelID:   task.ChannelID,
+		TrackingID:  task.TrackingID, // [新增] 传递 TrackingID
+	}
+
+	// 调用同步发送逻辑
+	// 注意：SendEmail 内部已经处理了 EmailLog 的写入
+	return SendEmail(req)
+}

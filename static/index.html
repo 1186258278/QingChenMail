@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>仪表盘 - 晴辰云邮</title>
+    <link href="/dashboard/css/tailwind.min.css?v=8.0" rel="stylesheet">
+    <script src="/dashboard/js/chart.min.js"></script>
+    <script src="/dashboard/js/common.js?v=8.0"></script>
+    <script src="/dashboard/js/layout.js?v=8.0"></script>
+</head>
+<body class="hidden" data-i18n-module="dashboard">
+    <div class="mb-8">
+        <h2 class="text-2xl font-bold text-gray-800" data-i18n="dashboard.title">仪表盘</h2>
+        <p class="text-sm text-gray-500 mt-1" data-i18n="dashboard.subtitle">系统实时运行概览</p>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+        <div class="bg-white/80 backdrop-blur rounded-2xl p-6 border border-white shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow duration-300">
+            <div class="text-gray-500 text-sm font-medium mb-2 flex items-center">
+                <span class="w-2 h-2 bg-blue-500 rounded-full mr-2"></span><span data-i18n="dashboard.today_sent">今日发送</span>
+            </div>
+            <div class="text-4xl font-bold text-gray-900 tracking-tight" id="today-sent">-</div>
+        </div>
+        <div class="bg-white/80 backdrop-blur rounded-2xl p-6 border border-white shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow duration-300">
+            <div class="text-gray-500 text-sm font-medium mb-2 flex items-center">
+                <span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span><span data-i18n="dashboard.success_rate">成功率</span>
+            </div>
+            <div class="text-4xl font-bold text-gray-900 tracking-tight" id="success-rate">-</div>
+        </div>
+        <div class="bg-white/80 backdrop-blur rounded-2xl p-6 border border-white shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow duration-300">
+            <div class="text-gray-500 text-sm font-medium mb-2 flex items-center">
+                <span class="w-2 h-2 bg-red-500 rounded-full mr-2"></span><span data-i18n="dashboard.failure_count">发送失败</span>
+            </div>
+            <div class="text-4xl font-bold text-gray-900 tracking-tight" id="failure-count">-</div>
+        </div>
+        <div class="bg-white/80 backdrop-blur rounded-2xl p-6 border border-white shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow duration-300">
+            <div class="text-gray-500 text-sm font-medium mb-2 flex items-center">
+                <span class="w-2 h-2 bg-purple-500 rounded-full mr-2"></span><span data-i18n="dashboard.total_sent">历史总量</span>
+            </div>
+            <div class="text-4xl font-bold text-gray-900 tracking-tight" id="total-sent">-</div>
+        </div>
+    </div>
+
+    <!-- 图表 -->
+    <div class="bg-white/80 backdrop-blur rounded-2xl p-6 border border-white shadow-sm mb-8">
+        <div class="flex justify-between items-center mb-6">
+            <h3 class="text-lg font-bold text-gray-800" data-i18n="dashboard.trend_title">发送趋势</h3>
+            <button onclick="fetchData()" class="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            </button>
+        </div>
+        <div class="h-80 w-full">
+            <canvas id="trendChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        Auth.check();
+
+        let chartInstance = null;
+
+        async function fetchData() {
+            try {
+                const data = await request('/stats');
+                document.getElementById('today-sent').innerText = data.today_sent;
+                document.getElementById('total-sent').innerText = data.total_sent;
+                document.getElementById('failure-count').innerText = data.failure_count;
+                
+                const total = data.success_count + data.failure_count;
+                const rate = total > 0 ? Math.round((data.success_count / total) * 100) : 100;
+                document.getElementById('success-rate').innerText = rate + '%';
+
+                // 更新图表
+                if (data.trend && data.trend.length > 0) {
+                    const labels = data.trend.map(t => t.time);
+                    const counts = data.trend.map(t => t.count);
+                    updateChart(labels, counts);
+                }
+            } catch (e) {}
+        }
+
+        function updateChart(labels, data) {
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            
+            if (chartInstance) {
+                chartInstance.destroy();
+            }
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: typeof I18n !== 'undefined' ? I18n.t('dashboard.chart_label') : '发送量',
+                        data: data,
+                        borderColor: '#2563EB',
+                        backgroundColor: 'rgba(37, 99, 235, 0.05)',
+                        borderWidth: 3,
+                        pointRadius: 3,
+                        pointHoverRadius: 6,
+                        pointBackgroundColor: '#fff',
+                        pointBorderColor: '#2563EB',
+                        pointBorderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        legend: { display: false },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                            titleColor: '#1F2937',
+                            bodyColor: '#4B5563',
+                            borderColor: '#E5E7EB',
+                            borderWidth: 1,
+                            padding: 10,
+                            displayColors: false
+                        }
+                    },
+                    scales: {
+                        y: { 
+                            beginAtZero: true, 
+                            grid: { borderDash: [4, 4], color: '#F3F4F6' }, 
+                            ticks: { font: { family: "system-ui" }, precision: 0 } 
+                        },
+                        x: { 
+                            grid: { display: false }, 
+                            ticks: { font: { family: "system-ui" }, maxTicksLimit: 12 } 
+                        }
+                    },
+                    interaction: {
+                        mode: 'nearest',
+                        axis: 'x',
+                        intersect: false
+                    }
+                }
+            });
+        }
+
+        // 初始化空图表
+        updateChart(
+            ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00', '24:00'],
+            [0, 0, 0, 0, 0, 0, 0]
+        );
+
+        // 等待 I18n 就绪后再加载数据，确保图表文本正确翻译
+        if (typeof I18n !== 'undefined' && I18n.isReady) {
+            fetchData();
+        } else {
+            document.addEventListener('i18n-ready', fetchData);
+        }
+    </script>
+</body>
+</html>

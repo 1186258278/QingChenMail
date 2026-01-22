@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>模板管理 - 晴辰云邮</title>
+    <link href="/dashboard/css/tailwind.min.css?v=8.0" rel="stylesheet">
+    <script src="/dashboard/js/common.js?v=8.0"></script>
+    <script src="/dashboard/js/layout.js?v=8.0"></script>
+</head>
+<body class="hidden" data-i18n-module="templates">
+    <div class="mb-8 flex justify-between items-center">
+        <div>
+            <h2 class="text-3xl font-bold text-gray-800" data-i18n="templates.title">邮件模板</h2>
+            <p class="text-gray-500 mt-1" data-i18n="templates.subtitle">创建和管理 HTML 邮件内容</p>
+        </div>
+        <button onclick="openModal()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition shadow-sm flex items-center">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+            <span data-i18n="templates.add_btn">新建模板</span>
+        </button>
+    </div>
+
+    <!-- 列表 -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <table class="w-full text-left">
+            <thead class="bg-gray-50 text-gray-500 text-xs uppercase font-semibold">
+                <tr>
+                    <th class="px-6 py-4" data-i18n="templates.table.name">模板名称</th>
+                    <th class="px-6 py-4" data-i18n="templates.table.subject">邮件主题</th>
+                    <th class="px-6 py-4 text-right" data-i18n="templates.table.created_at">创建时间</th>
+                    <th class="px-6 py-4 text-right" data-i18n="templates.table.actions">操作</th>
+                </tr>
+            </thead>
+            <tbody id="template-list" class="divide-y divide-gray-100 text-sm text-gray-700">
+                <!-- JS 渲染 -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 模态框 (超宽屏双栏) -->
+    <div id="template-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl p-6 flex flex-col shadow-2xl" style="width: 95vw; max-width: 1600px; height: 92vh;">
+            <!-- 顶部栏 -->
+            <div class="flex justify-between items-center mb-6 pb-4 border-b border-gray-100">
+                <h3 class="font-bold text-xl text-gray-800" id="modal-title" data-i18n="templates.modal.add_title">新建模板</h3>
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm font-medium text-purple-600" data-i18n="templates.modal.preset_label">✨ 快速填充：</span>
+                    <select onchange="applyPreset(this.value)" class="border border-purple-200 rounded-lg px-3 py-1.5 text-sm bg-purple-50 text-purple-700 focus:ring-2 focus:ring-purple-500 outline-none cursor-pointer">
+                        <option value="" data-i18n="templates.modal.preset_select">-- 选择预设场景 --</option>
+                        <option value="welcome" data-i18n="templates.preset.welcome">🎉 欢迎注册</option>
+                        <option value="verify" data-i18n="templates.preset.verify">🛡️ 验证码</option>
+                        <option value="reset_pwd" data-i18n="templates.preset.reset_pwd">🔒 重置密码</option>
+                        <option value="order" data-i18n="templates.preset.order">📦 订单确认</option>
+                        <option value="shipping" data-i18n="templates.preset.shipping">🚚 发货通知</option>
+                        <option value="activity" data-i18n="templates.preset.activity">📢 活动推广</option>
+                        <option value="holiday" data-i18n="templates.preset.holiday">🎁 节日问候</option>
+                        <option value="recall" data-i18n="templates.preset.recall">👋 用户召回</option>
+                        <option value="feedback" data-i18n="templates.preset.feedback">📝 问卷调查</option>
+                        <option value="system" data-i18n="templates.preset.system">⚠️ 系统通知</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- 主体内容 (双栏) -->
+            <div class="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-0">
+                <!-- 左侧：编辑区 -->
+                <form id="tpl-form" onsubmit="saveTemplate(event)" class="flex flex-col space-y-4 h-full overflow-y-auto pr-2">
+                    <input type="hidden" id="tpl-id">
+                    
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1" data-i18n="templates.modal.name_label">模板名称</label>
+                        <input type="text" id="tpl-name" required data-i18n-attr="placeholder:templates.modal.name_ph" placeholder="例如: 注册欢迎信" class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase mb-1" data-i18n="templates.modal.subject_label">邮件主题</label>
+                        <input type="text" id="tpl-subject" required data-i18n-attr="placeholder:templates.modal.subject_ph" placeholder="例如: 欢迎加入我们" class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition">
+                    </div>
+                    
+                    <div class="flex-1 flex flex-col min-h-[300px]">
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="block text-xs font-bold text-gray-500 uppercase" data-i18n="templates.modal.body_label">HTML 内容</label>
+                            <span class="text-xs text-blue-500 cursor-pointer hover:underline" onclick="insertVariable('{username}')" data-i18n="templates.modal.insert_var">插入 {username}</span>
+                        </div>
+                        <textarea id="tpl-body" required class="w-full border rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none font-mono text-xs flex-1 resize-none bg-gray-50 leading-relaxed" oninput="updatePreview()" placeholder="<html>...</html>"></textarea>
+                        <p class="text-xs text-gray-400 mt-2" data-i18n="templates.modal.body_hint">支持变量: {username}, {code}, {link} 等</p>
+                    </div>
+                </form>
+
+                <!-- 右侧：预览区 -->
+                <div class="flex flex-col h-full bg-gray-100 rounded-xl border border-gray-200 overflow-hidden">
+                    <div class="bg-gray-50 px-4 py-2 border-b border-gray-200 flex justify-between items-center">
+                        <span class="text-xs font-bold text-gray-500 uppercase tracking-wide" data-i18n="templates.modal.preview_title">实时预览 (Preview)</span>
+                        <div class="flex space-x-2">
+                            <div class="w-3 h-3 rounded-full bg-red-400"></div>
+                            <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
+                            <div class="w-3 h-3 rounded-full bg-green-400"></div>
+                        </div>
+                    </div>
+                    <div class="flex-1 relative bg-white">
+                        <iframe id="preview-frame" class="absolute inset-0 w-full h-full border-none"></iframe>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 底部栏 -->
+            <div class="flex justify-between items-center pt-5 mt-4 border-t border-gray-100">
+                <button type="button" onclick="sendTest()" class="text-gray-600 hover:text-blue-600 text-sm font-medium flex items-center transition">
+                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                    <span data-i18n="templates.modal.test_btn">发送测试邮件</span>
+                </button>
+                <div class="flex space-x-3">
+                    <button type="button" onclick="closeModal()" class="px-5 py-2 text-gray-500 hover:bg-gray-100 rounded-lg transition text-sm" data-i18n="common.cancel">取消</button>
+                    <button onclick="document.getElementById('tpl-form').requestSubmit()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md transition text-sm font-medium" data-i18n="templates.modal.save_btn">保存模板</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 纯预览模态框 -->
+    <div id="preview-modal" class="fixed inset-0 bg-black bg-opacity-60 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl overflow-hidden shadow-2xl flex flex-col" style="width: 80vw; height: 85vh;">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <h3 class="font-bold text-lg text-gray-800 flex items-center">
+                    <svg class="w-5 h-5 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                    <span data-i18n="templates.preview.title">模板预览</span>
+                </h3>
+                <button onclick="closePreview()" class="text-gray-400 hover:text-gray-600 transition">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="flex-1 bg-gray-100 p-8 flex justify-center">
+                <div class="w-full max-w-[800px] h-full bg-white shadow-lg rounded-lg overflow-hidden">
+                    <iframe id="readonly-preview-frame" class="w-full h-full border-none"></iframe>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        Auth.check();
+
+        let templateList = [];
+
+        // 统一响应式邮件骨架
+        const baseStyle = `<style>body{margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background-color:#f4f7f6}.wrapper{width:100%;table-layout:fixed;background-color:#f4f7f6;padding-bottom:40px}.main{background-color:#ffffff;margin:0 auto;max-width:600px;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.05)}.header{text-align:center;padding:30px 0}.content{padding:40px}.btn{display:inline-block;padding:12px 24px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:bold;margin-top:20px;transition:background-color 0.2s}.btn:hover{background-color:#1d4ed8}.footer{text-align:center;padding:20px;color:#9ca3af;font-size:12px;line-height:1.5}</style>`;
+        
+        function wrap(title, content) {
+            return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">${baseStyle}</head><body><div class="wrapper"><div class="header"><h1 style="color:#1f2937;margin:0;font-size:24px;font-weight:700">{app_name}</h1></div><div class="main"><div class="content"><h2 style="color:#111827;margin-top:0;font-size:20px;margin-bottom:20px">${title}</h2>${content}</div></div><div class="footer"><p>&copy; 2026 {app_name}. All rights reserved.</p><p>武汉晴辰天下网络科技有限公司 | <a href="#" style="color:#6b7280;text-decoration:underline">取消订阅</a></p></div></div></body></html>`;
+        }
+
+        // 10个精美预设模板
+        const presets = {
+            welcome: { 
+                name: "新用户欢迎信", 
+                subject: "欢迎加入 {app_name}！", 
+                body: wrap("欢迎加入我们！🎉", `<p style="color:#4b5563;line-height:1.6">亲爱的 {username}：</p><p style="color:#4b5563;line-height:1.6">感谢您注册我们的服务。我们非常高兴能有您的加入！在这里，您可以体验到最专业的服务。</p><p style="color:#4b5563;line-height:1.6">点击下方按钮开始您的探索之旅：</p><center><a href="{link}" class="btn">开始使用</a></center>`)
+            },
+            verify: { 
+                name: "验证码邮件", 
+                subject: "【安全提醒】您的验证码是 {code}", 
+                body: wrap("身份验证", `<p style="color:#4b5563">您正在进行身份验证操作，请使用以下验证码完成流程：</p><div style="background:#eff6ff;padding:20px;text-align:center;font-size:32px;font-weight:bold;color:#2563eb;letter-spacing:8px;margin:24px 0;border-radius:8px;border:1px dashed #bfdbfe">{code}</div><p style="color:#6b7280;font-size:13px;text-align:center">验证码 10 分钟内有效。请勿将此验证码泄露给他人。</p>`)
+            },
+            reset_pwd: { 
+                name: "重置密码", 
+                subject: "重置您的账户密码", 
+                body: wrap("重置密码请求", `<p style="color:#4b5563">我们收到了重置您账户密码的请求。</p><p style="color:#4b5563">如果是您本人的操作，请点击下方按钮设置新密码：</p><center><a href="{reset_link}" class="btn" style="background-color:#dc2626">重置密码</a></center><p style="margin-top:24px;color:#9ca3af;font-size:13px">如果您没有请求重置密码，请忽略此邮件，您的账户是安全的。</p>`)
+            },
+            order: { 
+                name: "订单确认", 
+                subject: "您的订单 #{order_id} 已确认", 
+                body: wrap("订单确认 ✅", `<p style="color:#4b5563">感谢您的购买！您的订单已处理。</p><table style="width:100%;border-collapse:collapse;margin:20px 0;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden"><tr><td style="padding:12px;border-bottom:1px solid #e5e7eb;background:#f9fafb;color:#6b7280">订单号</td><td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:bold;color:#111827">#{order_id}</td></tr><tr><td style="padding:12px;background:#f9fafb;color:#6b7280">支付金额</td><td style="padding:12px;text-align:right;font-weight:bold;color:#059669">￥{amount}</td></tr></table><p style="color:#4b5563">我们将在发货后再次通知您。</p>`)
+            },
+            shipping: { 
+                name: "发货通知", 
+                subject: "📦 您的包裹已发货！", 
+                body: wrap("包裹已发货", `<p style="color:#4b5563">您好 {username}，</p><p style="color:#4b5563">好消息！您的订单 #{order_id} 已经发货。</p><div style="background:#f3f4f6;padding:16px;border-radius:8px;margin:20px 0"><p style="margin:0;color:#6b7280;font-size:12px">物流单号</p><p style="margin:4px 0 0 0;font-weight:bold;color:#111827;font-size:18px">{tracking_no}</p></div><center><a href="{tracking_link}" class="btn">追踪物流</a></center>`)
+            },
+            activity: { 
+                name: "活动推广", 
+                subject: "🔥 限时特惠：全场 8 折起！", 
+                body: wrap("年中大促来袭", `<div style="background:linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);color:white;padding:30px;border-radius:8px;text-align:center;margin-bottom:20px"><h2 style="margin:0;font-size:28px">全场 8 折</h2><p style="margin:10px 0 0 0;opacity:0.9">限时 3 天 · 欲购从速</p></div><p style="color:#4b5563">亲爱的用户，为了回馈您的支持，我们推出了年度最强优惠！</p><center><a href="{promo_link}" class="btn" style="background-color:#dc2626">立即抢购</a></center>`)
+            },
+            holiday: { 
+                name: "节日问候", 
+                subject: "🎄 {app_name} 祝您节日快乐", 
+                body: wrap("节日快乐", `<div style="text-align:center"><img src="https://img.icons8.com/color/96/000000/christmas-star.png" alt="icon" style="width:64px;height:64px;margin-bottom:20px"></div><p style="color:#4b5563;text-align:center;font-size:16px">在这个温馨的时刻，我们想向您致以最诚挚的问候。<br>感谢您一年来的陪伴，愿您的生活充满爱与喜悦。</p><br><p style="text-align:center;color:#6b7280">— {app_name} 团队 敬上</p>`)
+            },
+            recall: { 
+                name: "用户召回", 
+                subject: "👋 {username}，好久不见", 
+                body: wrap("好久不见", `<p style="color:#4b5563">亲爱的 {username}：</p><p style="color:#4b5563">我们发现您已经有一段时间没有登录了。最近我们更新了许多新功能，相信您会喜欢。</p><div style="background:#fff7ed;border:1px solid #ffedd5;padding:16px;border-radius:8px;margin:20px 0;color:#c2410c"><strong>🎁 专属回归礼包已放入您的账户</strong></div><center><a href="{link}" class="btn">回来看看</a></center>`)
+            },
+            feedback: { 
+                name: "问卷调查", 
+                subject: "📝 我们想听听您的声音", 
+                body: wrap("满意度调查", `<p style="color:#4b5563">您好，</p><p style="color:#4b5563">为了给您提供更好的服务，我们诚邀您参与本次满意度调查。您的意见对我们至关重要。</p><p style="color:#6b7280;font-size:13px">预计用时：1 分钟</p><center><a href="{survey_link}" class="btn" style="background-color:#059669">参与调查</a></center>`)
+            },
+            system: { 
+                name: "系统通知", 
+                subject: "⚠️ 系统维护通知", 
+                body: wrap("系统维护公告", `<div style="background:#fffbeb;border-left:4px solid #f59e0b;padding:16px;margin-bottom:20px"><p style="margin:0;color:#92400e;font-weight:bold">维护时间：{time}</p></div><p style="color:#4b5563">尊敬的用户：</p><p style="color:#4b5563">为了提供更稳定的服务，我们将进行系统升级维护。</p><p style="color:#4b5563">维护期间服务可能无法访问，请您提前做好安排。给您带来的不便敬请谅解。</p>`)
+            }
+        };
+
+        function applyPreset(key) {
+            if (presets[key]) {
+                const t = presets[key];
+                document.getElementById('tpl-name').value = t.name;
+                document.getElementById('tpl-subject').value = t.subject;
+                document.getElementById('tpl-body').value = t.body;
+                updatePreview();
+                showToast(I18n.t('templates.toast.preset_applied'));
+            }
+        }
+
+        function updatePreview() {
+            const html = document.getElementById('tpl-body').value;
+            // 简单模拟变量替换，方便预览效果
+            const simulatedHtml = html
+                .replace(/{username}/g, 'John Doe')
+                .replace(/{app_name}/g, '晴辰云邮')
+                .replace(/{code}/g, '123456')
+                .replace(/{order_id}/g, '20260120001')
+                .replace(/{amount}/g, '99.00')
+                .replace(/{link}|{reset_link}|{promo_link}|{survey_link}/g, '#')
+                .replace(/{tracking_no}/g, 'SF1000000000')
+                .replace(/{tracking_link}/g, '#')
+                .replace(/{time}/g, '2026-01-21 00:00 - 02:00');
+                
+            const iframe = document.getElementById('preview-frame');
+            iframe.srcdoc = simulatedHtml;
+        }
+
+        function insertVariable(v) {
+            const textarea = document.getElementById('tpl-body');
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            const text = textarea.value;
+            textarea.value = text.substring(0, start) + v + text.substring(end);
+            textarea.focus();
+            textarea.selectionStart = textarea.selectionEnd = start + v.length;
+            updatePreview();
+        }
+
+        async function sendTest() {
+            const subject = document.getElementById('tpl-subject').value;
+            const body = document.getElementById('tpl-body').value;
+            
+            if (!body) {
+                alert(I18n.t('templates.alert.body_empty'));
+                return;
+            }
+
+            const email = prompt(I18n.t('templates.prompt.test_email'), "");
+            if (email) {
+                const testBody = body
+                    .replace(/{username}/g, 'Test User')
+                    .replace(/{app_name}/g, '晴辰云邮')
+                    .replace(/{code}/g, '888888')
+                    .replace(/{order_id}/g, 'TEST-001')
+                    .replace(/{amount}/g, '0.01');
+
+                try {
+                    await request('/send', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            to: email,
+                            subject: "[测试] " + subject,
+                            body: testBody
+                        })
+                    });
+                    showToast(I18n.t('templates.toast.test_sent'));
+                } catch(e) {
+                    // request handles error
+                }
+            }
+        }
+
+        function openModal() {
+            document.getElementById('tpl-id').value = '';
+            document.getElementById('tpl-form').reset();
+            document.getElementById('modal-title').innerText = I18n.t('templates.modal.add_title');
+            document.getElementById('preview-frame').srcdoc = '';
+            document.getElementById('template-modal').classList.remove('hidden');
+        }
+        function closeModal() { document.getElementById('template-modal').classList.add('hidden'); }
+
+        async function loadTemplates() {
+            try {
+                const list = await request('/templates');
+                templateList = list;
+                const tbody = document.getElementById('template-list');
+                tbody.innerHTML = '';
+
+                if (list.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="4" class="px-6 py-12 text-center text-gray-400"><span data-i18n="templates.table.empty">暂无模板，请点击右上角新建</span></td></tr>`;
+                    if (typeof I18n !== 'undefined' && I18n.isReady) I18n.render();
+                    return;
+                }
+
+                list.forEach(t => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'hover:bg-gray-50 transition';
+
+                    tr.innerHTML = `
+                        <td class="px-6 py-4 font-medium text-gray-900">${Utils.escapeHtml(t.name)}</td>
+                        <td class="px-6 py-4 text-gray-500 truncate max-w-xs">${Utils.escapeHtml(t.subject)}</td>
+                        <td class="px-6 py-4 text-right text-gray-400 font-mono text-xs">${Utils.formatDate(t.created_at)}</td>
+                        <td class="px-6 py-4 text-right space-x-2">
+                            <button onclick="openPreview(${t.id})" class="px-2 py-1 text-gray-500 hover:bg-gray-100 rounded transition" data-i18n-attr="title:templates.action.preview" title="预览">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                            </button>
+                            <button onclick="testTemplate(${t.id})" class="px-2 py-1 text-gray-500 hover:bg-gray-100 rounded transition" data-i18n-attr="title:templates.action.test" title="发送测试">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                            </button>
+                            <button onclick="editTemplate(${t.id})" class="px-2 py-1 text-blue-600 hover:bg-blue-50 rounded transition font-medium text-sm" data-i18n="templates.action.edit">编辑</button>
+                            <button onclick="deleteTemplate(${t.id})" class="px-2 py-1 text-red-500 hover:bg-red-50 rounded transition text-sm" data-i18n="templates.action.delete">删除</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+                
+                if (typeof I18n !== 'undefined' && I18n.isReady) I18n.render();
+            } catch (e) {}
+        }
+
+        function editTemplate(id) {
+            const t = templateList.find(item => item.id === id);
+            if (!t) return;
+
+            document.getElementById('tpl-id').value = t.id;
+            document.getElementById('tpl-name').value = t.name;
+            document.getElementById('tpl-subject').value = t.subject;
+            document.getElementById('tpl-body').value = t.body;
+            document.getElementById('modal-title').innerText = I18n.t('templates.modal.edit_title');
+            updatePreview();
+            document.getElementById('template-modal').classList.remove('hidden');
+        }
+
+        async function saveTemplate(e) {
+            e.preventDefault();
+            const id = document.getElementById('tpl-id').value;
+            const data = {
+                name: document.getElementById('tpl-name').value,
+                subject: document.getElementById('tpl-subject').value,
+                body: document.getElementById('tpl-body').value
+            };
+
+            try {
+                if (id) {
+                    await request(`/templates/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+                } else {
+                    await request('/templates', { method: 'POST', body: JSON.stringify(data) });
+                }
+                closeModal();
+                loadTemplates();
+                showToast(I18n.t('common.success'));
+            } catch (err) {}
+        }
+
+        async function deleteTemplate(id) {
+            if (confirm(I18n.t('templates.alert.delete_confirm'))) {
+                try {
+                    await request(`/templates/${id}`, { method: 'DELETE' });
+                    loadTemplates();
+                    showToast(I18n.t('common.deleted'));
+                } catch (e) {}
+            }
+        }
+
+        loadTemplates();
+    </script>
+</body>
+</html>

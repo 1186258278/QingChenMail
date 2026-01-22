@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>营销任务 - 晴辰云邮</title>
+    <link href="/dashboard/css/tailwind.min.css?v=8.0" rel="stylesheet">
+    <script src="/dashboard/js/common.js?v=8.0"></script>
+    <script src="/dashboard/js/layout.js?v=8.0"></script>
+</head>
+<body class="hidden" data-i18n-module="campaigns">
+    <div class="mb-8 flex justify-between items-center">
+        <div>
+            <h2 class="text-3xl font-bold text-gray-800" data-i18n="campaigns.title">营销任务</h2>
+            <p class="text-gray-500 mt-1" data-i18n="campaigns.subtitle">创建和管理批量邮件发送任务</p>
+        </div>
+        <button onclick="openModal()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition shadow-sm flex items-center">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+            <span data-i18n="campaigns.action.create">创建任务</span>
+        </button>
+    </div>
+
+    <!-- 任务列表 -->
+    <div id="campaign-list" class="space-y-4">
+        <!-- 动态生成 -->
+    </div>
+
+    <!-- 任务模态框 -->
+    <div id="campaign-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl p-8 w-[600px] shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h3 class="font-bold text-xl mb-6 text-gray-800" data-i18n="campaigns.modal.title">创建营销任务</h3>
+            <form onsubmit="saveCampaign(event)">
+                <input type="hidden" id="campaign-id">
+                
+                <div class="space-y-4">
+                    <!-- 基本信息 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="campaigns.modal.name">任务名称</label>
+                        <input type="text" id="name" required placeholder="例如：2026新年促销" class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    
+                    <!-- 发件配置 -->
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="campaigns.modal.sender">发件通道</label>
+                            <select id="sender-id" required class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                                <!-- 动态加载 -->
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="campaigns.modal.target">收件人组</label>
+                            <select id="target-group-id" required class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                                <!-- 动态加载 -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- 邮件内容 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="campaigns.modal.subject">邮件主题</label>
+                        <input type="text" id="subject" required class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="campaigns.modal.scheduled_at">计划发送时间 (选填)</label>
+                        <input type="datetime-local" id="scheduled-at" class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <p class="text-xs text-gray-500 mt-1" data-i18n="campaigns.modal.scheduled_hint">留空则为手动启动；若设置了时间，启动后将等待至该时间自动发送。</p>
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="block text-sm font-medium text-gray-700" data-i18n="campaigns.modal.body">邮件正文 (HTML)</label>
+                            <select id="template-select" onchange="loadTemplate()" class="text-xs border rounded px-2 py-1">
+                                <option value="" data-i18n="campaigns.modal.select_template">选择模板...</option>
+                                <!-- 动态加载 -->
+                            </select>
+                        </div>
+                        <textarea id="body" required class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm" rows="8"></textarea>
+                        <p class="text-xs text-gray-500 mt-1" data-i18n="campaigns.modal.vars_hint">支持变量: {name}, {email}</p>
+                    </div>
+                </div>
+
+                <div class="flex justify-end space-x-3 mt-8">
+                    <button type="button" onclick="closeModal()" class="px-5 py-2 text-gray-500 hover:bg-gray-100 rounded-lg transition" data-i18n="common.cancel">取消</button>
+                    <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md transition" data-i18n="common.save">保存草稿</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        Auth.check();
+
+        let templates = [];
+
+        async function init() {
+            await Promise.all([loadCampaigns(), loadOptions()]);
+        }
+
+        async function loadOptions() {
+            try {
+                // Load SMTP
+                const smtps = await request('/smtp');
+                const senderSelect = document.getElementById('sender-id');
+                senderSelect.innerHTML = smtps.map(s => `<option value="${s.id}">${s.name} (${s.username})</option>`).join('');
+
+                // Load Groups
+                const groups = await request('/contacts/groups');
+                const groupSelect = document.getElementById('target-group-id');
+                groupSelect.innerHTML = groups.map(g => `<option value="${g.id}">${g.name} (${g.count}人)</option>`).join('');
+
+                // Load Templates
+                templates = await request('/templates');
+                const tplSelect = document.getElementById('template-select');
+                tplSelect.innerHTML = `<option value="">${I18n.t('campaigns.modal.select_template')}</option>` + 
+                    templates.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function loadTemplate() {
+            const id = document.getElementById('template-select').value;
+            if (!id) return;
+            const tpl = templates.find(t => t.id == id);
+            if (tpl) {
+                if (document.getElementById('subject').value === '') document.getElementById('subject').value = tpl.subject;
+                document.getElementById('body').value = tpl.body;
+            }
+        }
+
+        async function loadCampaigns() {
+            try {
+                const list = await request('/campaigns');
+                const container = document.getElementById('campaign-list');
+                container.innerHTML = '';
+
+                if (list.length === 0) {
+                    container.innerHTML = `
+                        <div class="text-center py-16 bg-white rounded-xl border-2 border-dashed border-gray-300">
+                            <p class="text-gray-500 text-lg" data-i18n="campaigns.empty">暂无营销任务</p>
+                        </div>`;
+                    if (typeof I18n !== 'undefined' && I18n.isReady) I18n.render();
+                    return;
+                }
+
+                list.forEach(c => {
+                    const statusColors = {
+                        'draft': 'bg-gray-100 text-gray-600',
+                        'scheduled': 'bg-blue-100 text-blue-600',
+                        'processing': 'bg-yellow-100 text-yellow-600',
+                        'completed': 'bg-green-100 text-green-600',
+                        'failed': 'bg-red-100 text-red-600'
+                    };
+                    
+                    const progress = c.total_count > 0 ? Math.round((c.sent_count / c.total_count) * 100) : 0;
+
+                    const div = document.createElement('div');
+                    div.className = 'bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex justify-between items-center';
+                    div.innerHTML = `
+                        <div class="flex-1">
+                            <div class="flex items-center space-x-3 mb-2">
+                                <h3 class="text-lg font-bold text-gray-800">${c.name}</h3>
+                                <span class="px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[c.status] || 'bg-gray-100'}">
+                                    ${I18n.t(`campaigns.status.${c.status}`) || c.status}
+                                </span>
+                            </div>
+                            <p class="text-sm text-gray-500 mb-3">${c.subject}</p>
+                            <div class="flex items-center space-x-6 text-sm text-gray-600">
+                                <span><span class="font-bold">${c.total_count}</span> <span data-i18n="campaigns.stats.total">总数</span></span>
+                                <span><span class="font-bold text-green-600">${c.success_count}</span> <span data-i18n="campaigns.stats.success">成功</span></span>
+                                <span><span class="font-bold text-red-500">${c.fail_count}</span> <span data-i18n="campaigns.stats.failed">失败</span></span>
+                                <span class="pl-4 border-l border-gray-300"><span class="font-bold text-indigo-600">${c.open_count || 0}</span> <span data-i18n="campaigns.stats.opened">已打开</span></span>
+                                <span><span class="font-bold text-blue-500">${c.click_count || 0}</span> <span data-i18n="campaigns.stats.clicked">点击</span></span>
+                                <span><span class="font-bold text-gray-500">${c.unsubscribe_count || 0}</span> <span data-i18n="campaigns.stats.unsubscribed">退订</span></span>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center space-x-4">
+                             ${c.status === 'processing' ? `
+                                <div class="w-32 bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                                    <div class="bg-blue-600 h-2.5 rounded-full" style="width: ${progress}%"></div>
+                                </div>
+                             ` : ''}
+                             
+                             ${c.status === 'draft' ? `
+                                <button onclick="startCampaign(${c.id})" class="text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded transition text-sm font-medium" data-i18n="campaigns.action.start">启动</button>
+                                <button onclick="editCampaign(${c.id})" class="text-gray-600 hover:bg-gray-100 px-3 py-1.5 rounded transition text-sm" data-i18n="common.edit">编辑</button>
+                             ` : ''}
+                             
+                             <button onclick="deleteCampaign(${c.id})" class="text-red-500 hover:bg-red-50 px-3 py-1.5 rounded transition text-sm" data-i18n="common.delete">删除</button>
+                        </div>
+                    `;
+                    container.appendChild(div);
+                });
+
+                if (typeof I18n !== 'undefined' && I18n.isReady) I18n.render();
+
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function openModal() {
+            document.getElementById('campaign-modal').classList.remove('hidden');
+            document.getElementById('campaign-id').value = '';
+            document.getElementById('name').value = '';
+            document.getElementById('subject').value = '';
+            document.getElementById('body').value = '';
+            document.getElementById('scheduled-at').value = '';
+        }
+
+        function closeModal() {
+            document.getElementById('campaign-modal').classList.add('hidden');
+        }
+
+        async function editCampaign(id) {
+            // Need implement getDetail logic if list doesn't have full data, 
+            // but currently list has all data except large body maybe. 
+            // Simplified: Fetch list again finding item.
+            const list = await request('/campaigns');
+            const c = list.find(i => i.id === id);
+            if (!c) return;
+
+            document.getElementById('campaign-modal').classList.remove('hidden');
+            document.getElementById('campaign-id').value = c.id;
+            document.getElementById('name').value = c.name;
+            document.getElementById('subject').value = c.subject;
+            document.getElementById('body').value = c.body;
+            document.getElementById('sender-id').value = c.sender_id;
+            document.getElementById('target-group-id').value = c.target_group_id;
+            
+            if (c.scheduled_at) {
+                const date = new Date(c.scheduled_at);
+                date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+                document.getElementById('scheduled-at').value = date.toISOString().slice(0, 16);
+            } else {
+                document.getElementById('scheduled-at').value = '';
+            }
+        }
+
+        async function saveCampaign(e) {
+            e.preventDefault();
+            const id = document.getElementById('campaign-id').value;
+            
+            const scheduledVal = document.getElementById('scheduled-at').value;
+            let scheduledAt = null;
+            if (scheduledVal) {
+                scheduledAt = new Date(scheduledVal).toISOString();
+            }
+
+            const data = {
+                name: document.getElementById('name').value,
+                subject: document.getElementById('subject').value,
+                body: document.getElementById('body').value,
+                sender_id: parseInt(document.getElementById('sender-id').value),
+                target_type: 'group',
+                target_group_id: parseInt(document.getElementById('target-group-id').value),
+                scheduled_at: scheduledAt
+            };
+
+            try {
+                if (id) {
+                    await request(`/campaigns/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+                } else {
+                    await request('/campaigns', { method: 'POST', body: JSON.stringify(data) });
+                }
+                closeModal();
+                loadCampaigns();
+                showToast(I18n.t('common.success'));
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        async function startCampaign(id) {
+            if (!confirm(I18n.t('campaigns.alert.start_confirm'))) return;
+            try {
+                const res = await request(`/campaigns/${id}/start`, { method: 'POST' });
+                showToast(res.message);
+                loadCampaigns();
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        async function deleteCampaign(id) {
+            if (!confirm(I18n.t('common.confirm_delete'))) return;
+            try {
+                await request(`/campaigns/${id}`, { method: 'DELETE' });
+                loadCampaigns();
+                showToast(I18n.t('common.deleted'));
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>

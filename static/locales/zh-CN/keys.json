@@ -1,0 +1,20 @@
+{
+    "keys.title": "密钥管理",
+    "keys.subtitle": "管理 API 访问密钥 (API Keys)",
+    "keys.add_btn": "生成新密钥",
+    "keys.table.name": "备注名称",
+    "keys.table.key": "API Key",
+    "keys.table.last_used": "最后使用",
+    "keys.table.created_at": "创建时间",
+    "keys.table.actions": "操作",
+    "keys.table.empty": "暂无密钥",
+    "keys.table.never_used": "从未",
+    "keys.action.delete": "删除",
+    "keys.action.copy_title": "点击复制",
+    "keys.modal.title": "生成新密钥",
+    "keys.modal.name_label": "备注名称",
+    "keys.modal.name_ph": "例如: 博客系统集成",
+    "keys.modal.create_btn": "生成",
+    "keys.toast.success": "密钥生成成功",
+    "keys.alert.delete_confirm": "删除后使用此密钥的集成将无法访问，确认继续？"
+}

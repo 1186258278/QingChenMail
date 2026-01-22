@@ -1,0 +1,22 @@
+{
+    "files.title": "File Manager",
+    "files.subtitle": "Manage attachments uploaded via API",
+    "files.btn.batch_delete": "Batch Delete",
+    "files.btn.refresh": "Refresh",
+    "files.table.name": "Filename",
+    "files.table.size": "Size",
+    "files.table.source": "Source",
+    "files.table.related": "Related To",
+    "files.table.created_at": "Uploaded At",
+    "files.table.actions": "Actions",
+    "files.table.empty": "No files found",
+    "files.source.url": "Remote URL",
+    "files.source.api": "API Upload",
+    "files.action.download": "Download",
+    "files.action.delete": "Delete",
+    "files.btn.delete_selected": "Delete {count} selected files",
+    "files.alert.delete_confirm": "Are you sure? This action cannot be undone and may break attachment links in sent emails.",
+    "files.toast.deleted": "File deleted",
+    "files.alert.batch_delete_confirm": "Are you sure you want to delete {count} selected files?",
+    "files.toast.batch_deleted": "Batch delete successful"
+}

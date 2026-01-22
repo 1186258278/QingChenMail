@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>发送通道 - 晴辰云邮</title>
+    <link href="/dashboard/css/tailwind.min.css?v=8.0" rel="stylesheet">
+    <script src="/dashboard/js/common.js?v=8.0"></script>
+    <script src="/dashboard/js/layout.js?v=8.0"></script>
+</head>
+<body class="hidden" data-i18n-module="smtp">
+    <div class="mb-8 flex justify-between items-center">
+        <div>
+            <h2 class="text-3xl font-bold text-gray-800" data-i18n="smtp.title">发送通道</h2>
+            <p class="text-gray-500 mt-1" data-i18n="smtp.subtitle">管理 SMTP 中继服务商配置</p>
+        </div>
+        <button onclick="openModal()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition shadow-sm flex items-center">
+            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+            <span data-i18n="smtp.add_btn">添加通道</span>
+        </button>
+    </div>
+
+    <!-- 通道列表 -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="smtp-list">
+        <!-- 列表由 JS 渲染 -->
+    </div>
+
+    <!-- 编辑模态框 -->
+    <div id="smtp-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl p-8 w-[500px] shadow-2xl">
+            <h3 class="font-bold text-xl mb-6 text-gray-800" id="modal-title" data-i18n="smtp.modal.add_title">添加 SMTP 通道</h3>
+            <form onsubmit="saveSMTP(event)" id="smtp-form" class="space-y-4">
+                <input type="hidden" id="smtp-id">
+                
+                <!-- 预设选择 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="smtp.modal.preset_label">快速预设</label>
+                    <select onchange="applyPreset(this.value)" class="w-full border rounded-lg px-4 py-2 bg-gray-50 text-gray-600 focus:bg-white focus:ring-2 focus:ring-blue-500 transition">
+                        <option value="" data-i18n="smtp.modal.preset_custom">-- 自定义 --</option>
+                        <option value="aliyun">阿里云 DM</option>
+                        <option value="tencent">腾讯云 SES</option>
+                        <option value="gmail">Gmail</option>
+                        <option value="outlook">Outlook</option>
+                        <option value="sendgrid">SendGrid</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="smtp.modal.name_label">显示名称</label>
+                    <input type="text" id="smtp-name" required data-i18n-attr="placeholder:smtp.modal.name_ph" placeholder="例如: 公司邮箱" class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+
+                <div class="grid grid-cols-3 gap-4">
+                    <div class="col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="smtp.modal.host_label">主机地址 (Host)</label>
+                        <input type="text" id="smtp-host" required placeholder="smtp.example.com" class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="smtp.modal.port_label">端口</label>
+                        <input type="number" id="smtp-port" required value="465" class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="smtp.modal.user_label">用户名</label>
+                    <input type="text" id="smtp-user" required class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="smtp.modal.pass_label">密码</label>
+                    <input type="password" id="smtp-pass" required class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+
+                <div class="flex items-center space-x-6 pt-2">
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" id="smtp-ssl" checked class="form-checkbox h-5 w-5 text-blue-600 rounded">
+                        <span class="ml-2 text-sm text-gray-700" data-i18n="smtp.modal.ssl_label">启用 SSL</span>
+                    </label>
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" id="smtp-default" class="form-checkbox h-5 w-5 text-blue-600 rounded">
+                        <span class="ml-2 text-sm text-gray-700" data-i18n="smtp.modal.default_label">设为默认</span>
+                    </label>
+                </div>
+
+                <div class="flex justify-end space-x-3 mt-8 pt-4 border-t border-gray-100">
+                    <button type="button" onclick="closeModal()" class="px-5 py-2 text-gray-500 hover:bg-gray-100 rounded-lg transition" data-i18n="common.cancel">取消</button>
+                    <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md transition" data-i18n="common.save">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        Auth.check();
+
+        let smtpList = []; // 全局存储
+
+        const presets = {
+            aliyun: { host: 'smtpdm.aliyun.com', port: 465, ssl: true },
+            tencent: { host: 'smtp.qcloudmail.com', port: 465, ssl: true },
+            gmail: { host: 'smtp.gmail.com', port: 465, ssl: true },
+            outlook: { host: 'smtp.office365.com', port: 587, ssl: false }, // Outlook usually STARTTLS
+            sendgrid: { host: 'smtp.sendgrid.net', port: 465, ssl: true }
+        };
+
+        function applyPreset(key) {
+            if (presets[key]) {
+                const p = presets[key];
+                document.getElementById('smtp-host').value = p.host;
+                document.getElementById('smtp-port').value = p.port;
+                document.getElementById('smtp-ssl').checked = p.ssl;
+            }
+        }
+
+        async function loadSMTPs() {
+            try {
+                const list = await request('/smtp');
+                smtpList = list; // 更新全局数据
+                const container = document.getElementById('smtp-list');
+                
+                // 默认 Direct Send 卡片
+                container.innerHTML = `
+                    <div class="bg-white rounded-xl shadow-sm p-6 border border-gray-200 relative group opacity-75 hover:opacity-100 transition">
+                        <div class="absolute top-4 right-4 bg-gray-100 text-gray-500 text-xs px-2 py-1 rounded" data-i18n="smtp.card.builtin">内置</div>
+                        <h3 class="font-bold text-gray-900 text-lg mb-1">Direct Send</h3>
+                        <p class="text-sm text-gray-500 mb-4" data-i18n="smtp.card.direct_desc">本机直接投递到目标 MX</p>
+                        <div class="text-sm text-gray-600 space-y-1">
+                            <p class="flex items-center"><span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span> <span data-i18n="smtp.card.no_auth">无需账号</span></p>
+                            <p class="flex items-center"><span class="w-2 h-2 bg-yellow-500 rounded-full mr-2"></span> <span data-i18n="smtp.card.port_25">需开放 25 端口</span></p>
+                        </div>
+                    </div>`;
+
+                list.forEach(s => {
+                    const div = document.createElement('div');
+                    const defaultBadge = I18n.t('smtp.card.default');
+                    const sslStatus = s.ssl ? I18n.t('smtp.card.ssl_on') : I18n.t('smtp.card.ssl_off');
+                    const delText = I18n.t('smtp.action.delete');
+                    const editText = I18n.t('smtp.action.edit');
+
+                    div.className = `bg-white rounded-xl shadow-sm p-6 border transition hover:shadow-md relative group ${s.is_default ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-200'}`;
+                    div.innerHTML = `
+                        ${s.is_default ? `<div class="absolute top-4 right-4 bg-blue-100 text-blue-600 text-xs font-bold px-2 py-1 rounded">${defaultBadge}</div>` : ''}
+                        <h3 class="font-bold text-gray-900 text-lg mb-1 truncate pr-16" title="${Utils.escapeHtml(s.name)}">${Utils.escapeHtml(s.name)}</h3>
+                        <p class="text-sm text-gray-500 mb-4 font-mono truncate">${Utils.escapeHtml(s.host)}:${s.port}</p>
+                        <div class="text-sm text-gray-600 space-y-2">
+                            <div class="flex items-center truncate" title="${Utils.escapeHtml(s.username)}">
+                                <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                                ${Utils.escapeHtml(s.username)}
+                            </div>
+                            <div class="flex items-center">
+                                <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                                ${sslStatus}
+                            </div>
+                        </div>
+                        <div class="mt-6 pt-4 border-t border-gray-100 flex justify-between items-center opacity-0 group-hover:opacity-100 transition duration-200">
+                            <button onclick="deleteSMTP(${s.id})" class="text-red-500 hover:text-red-700 text-sm">${delText}</button>
+                            <button onclick="editSMTP(${s.id})" class="text-blue-600 hover:text-blue-800 text-sm font-medium">${editText}</button>
+                        </div>
+                    `;
+                    container.appendChild(div);
+                });
+                
+                // Render i18n inside generated HTML
+                if (typeof I18n !== 'undefined' && I18n.isReady) I18n.render();
+            } catch (e) {}
+        }
+
+        // 模态框控制
+        function openModal() {
+            document.getElementById('smtp-form').reset();
+            document.getElementById('smtp-id').value = '';
+            document.getElementById('modal-title').innerText = I18n.t('smtp.modal.add_title');
+            document.getElementById('smtp-modal').classList.remove('hidden');
+        }
+        function closeModal() { document.getElementById('smtp-modal').classList.add('hidden'); }
+        
+        // 编辑逻辑：通过 ID 查找内存中的数据
+        function editSMTP(id) {
+            const s = smtpList.find(item => item.id === id);
+            if (!s) return;
+
+            document.getElementById('smtp-id').value = s.id;
+            document.getElementById('smtp-name').value = s.name;
+            document.getElementById('smtp-host').value = s.host;
+            document.getElementById('smtp-port').value = s.port;
+            document.getElementById('smtp-user').value = s.username;
+            document.getElementById('smtp-pass').value = s.password; 
+            document.getElementById('smtp-ssl').checked = s.ssl;
+            document.getElementById('smtp-default').checked = s.is_default || false;
+            document.getElementById('modal-title').innerText = I18n.t('smtp.modal.edit_title');
+            document.getElementById('smtp-modal').classList.remove('hidden');
+        }
+
+        async function saveSMTP(e) {
+            e.preventDefault();
+            const id = document.getElementById('smtp-id').value;
+            const data = {
+                name: document.getElementById('smtp-name').value,
+                host: document.getElementById('smtp-host').value,
+                port: parseInt(document.getElementById('smtp-port').value),
+                username: document.getElementById('smtp-user').value,
+                password: document.getElementById('smtp-pass').value,
+                ssl: document.getElementById('smtp-ssl').checked,
+                is_default: document.getElementById('smtp-default').checked
+            };
+
+            try {
+                if (id) {
+                    // Update
+                    await request(`/smtp/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+                } else {
+                    // Create
+                    await request('/smtp', { method: 'POST', body: JSON.stringify(data) });
+                }
+                closeModal();
+                loadSMTPs();
+                showToast(I18n.t('common.success'));
+            } catch (err) {}
+        }
+
+        async function deleteSMTP(id) {
+            if (confirm(I18n.t('smtp.alert.delete_confirm'))) {
+                try {
+                    await request(`/smtp/${id}`, { method: 'DELETE' });
+                    loadSMTPs();
+                    showToast(I18n.t('common.deleted'));
+                } catch (e) {}
+            }
+        }
+
+        loadSMTPs();
+    </script>
+</body>
+</html>

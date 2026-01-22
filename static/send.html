@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>发送邮件 - 晴辰云邮</title>
+    <link href="/dashboard/css/tailwind.min.css?v=8.0" rel="stylesheet">
+    <script src="/dashboard/js/common.js?v=8.0"></script>
+    <script src="/dashboard/js/layout.js?v=8.0"></script>
+    <style>
+        .preview-area { min-height: 400px; border: 1px solid #e5e7eb; border-radius: 0.5rem; }
+    </style>
+</head>
+<body class="hidden" data-i18n-module="send">
+    <div class="mb-8">
+        <h2 class="text-3xl font-bold text-gray-800" data-i18n="send.header_title">发送中心</h2>
+        <p class="text-gray-500 mt-1" data-i18n="send.header_desc">手动发送邮件测试或进行小规模群发</p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- 配置区域 -->
+        <div class="lg:col-span-1 space-y-6">
+            <!-- 1. 发送配置 -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="font-bold text-lg text-gray-800 mb-4 flex items-center">
+                    <span class="bg-blue-100 text-blue-600 w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2">1</span>
+                    <span data-i18n="send.config_title">发送配置</span>
+                </h3>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="send.smtp_label">选择发送通道</label>
+                        <select id="smtp-select" class="w-full border rounded-lg px-3 py-2 text-sm bg-gray-50 focus:bg-white transition outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="" data-i18n="common.loading">加载中...</option>
+                        </select>
+                        <p class="text-xs text-gray-400 mt-1" data-i18n="send.smtp_hint">选择用于投递邮件的 SMTP 服务商</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. 内容配置 -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 class="font-bold text-lg text-gray-800 mb-4 flex items-center">
+                    <span class="bg-blue-100 text-blue-600 w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2">2</span>
+                    <span data-i18n="send.content_title">邮件内容</span>
+                </h3>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="send.from_label">发件人 (From)</label>
+                        <div class="relative">
+                            <input type="text" id="mail-from" list="from-list" class="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" data-i18n-attr="placeholder:send.from_ph" placeholder="默认使用系统配置 (noreply@...)">
+                            <datalist id="from-list"></datalist>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-1" data-i18n="send.from_hint">留空则使用默认。输入前缀可自定义，或从列表选择。</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="send.template_label">加载模板</label>
+                        <select id="template-select" onchange="loadTemplateContent()" class="w-full border rounded-lg px-3 py-2 text-sm bg-gray-50 focus:bg-white transition outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="" data-i18n="send.template_manual">-- 手动输入 --</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="send.subject_label">邮件主题</label>
+                        <input type="text" id="mail-subject" class="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" data-i18n-attr="placeholder:send.subject_ph" placeholder="请输入邮件主题">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="send.to_label">收件人</label>
+                        <input type="email" id="mail-to" class="w-full border rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="recipient@example.com">
+                        <p class="text-xs text-gray-400 mt-1" data-i18n="send.to_hint">目前仅支持单次发送一个收件人进行测试</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 发送按钮 -->
+            <button onclick="sendEmail()" id="send-btn" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl shadow-lg hover:bg-blue-700 transition transform hover:-translate-y-1 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                <span data-i18n="send.btn_send">立即发送</span>
+            </button>
+        </div>
+
+        <!-- 编辑与预览区域 -->
+        <div class="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col h-[600px]">
+            <div class="border-b border-gray-100 p-4 flex justify-between items-center bg-gray-50 rounded-t-xl">
+                <div class="flex space-x-1 bg-gray-200 p-1 rounded-lg">
+                    <button onclick="switchView('edit')" id="tab-edit" class="px-4 py-1.5 text-sm font-medium rounded-md bg-white shadow text-gray-800 transition" data-i18n="send.editor.edit">编辑 HTML</button>
+                    <button onclick="switchView('preview')" id="tab-preview" class="px-4 py-1.5 text-sm font-medium rounded-md text-gray-500 hover:text-gray-700 transition" data-i18n="send.editor.preview">实时预览</button>
+                </div>
+                <div class="text-xs text-gray-400" data-i18n="send.editor.hint">支持 HTML 源码编辑</div>
+            </div>
+            
+            <div class="flex-1 relative">
+                <textarea id="mail-body" class="w-full h-full p-4 font-mono text-sm outline-none resize-none" data-i18n-attr="placeholder:send.editor.body_ph" placeholder="<html><body><h1>在此输入 HTML 内容...</h1></body></html>" oninput="updatePreview()"></textarea>
+                <iframe id="mail-preview" class="w-full h-full absolute inset-0 bg-white hidden"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        Auth.check();
+
+        let templates = [];
+
+        async function init() {
+            // 加载发件人域名建议
+            try {
+                const domains = await request('/domains');
+                const datalist = document.getElementById('from-list');
+                const prefixes = ['noreply', 'admin', 'support', 'notification'];
+                
+                domains.forEach(d => {
+                    prefixes.forEach(p => {
+                        const opt = document.createElement('option');
+                        opt.value = `${p}@${d.name}`;
+                        datalist.appendChild(opt);
+                    });
+                });
+            } catch (e) {}
+
+            // 加载 SMTP 列表
+            try {
+                const smtps = await request('/smtp');
+                const select = document.getElementById('smtp-select');
+                select.innerHTML = '';
+                
+                // 添加 Direct 选项
+                const directOpt = document.createElement('option');
+                directOpt.value = "direct";
+                directOpt.text = typeof I18n !== 'undefined' ? I18n.t('send.smtp_direct') : "Direct Send";
+                select.appendChild(directOpt);
+
+                smtps.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.id;
+                    opt.text = `${s.name} (${s.host})`;
+                    if (s.is_default) opt.selected = true;
+                    select.appendChild(opt);
+                });
+            } catch (e) {}
+
+            // 加载模板列表
+            try {
+                templates = await request('/templates');
+                const select = document.getElementById('template-select');
+                templates.forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t.id;
+                    opt.text = t.name;
+                    select.appendChild(opt);
+                });
+            } catch (e) {}
+        }
+
+        function loadTemplateContent() {
+            const id = document.getElementById('template-select').value;
+            if (!id) return;
+            
+            const tpl = templates.find(t => t.id == id);
+            if (tpl) {
+                document.getElementById('mail-subject').value = tpl.subject;
+                document.getElementById('mail-body').value = tpl.body;
+                updatePreview();
+                showToast(I18n.t('send.toast.template_loaded'));
+            }
+        }
+
+        function switchView(mode) {
+            const editTab = document.getElementById('tab-edit');
+            const previewTab = document.getElementById('tab-preview');
+            const editor = document.getElementById('mail-body');
+            const preview = document.getElementById('mail-preview');
+
+            if (mode === 'edit') {
+                editTab.className = "px-4 py-1.5 text-sm font-medium rounded-md bg-white shadow text-gray-800 transition";
+                previewTab.className = "px-4 py-1.5 text-sm font-medium rounded-md text-gray-500 hover:text-gray-700 transition";
+                editor.classList.remove('hidden');
+                preview.classList.add('hidden');
+            } else {
+                editTab.className = "px-4 py-1.5 text-sm font-medium rounded-md text-gray-500 hover:text-gray-700 transition";
+                previewTab.className = "px-4 py-1.5 text-sm font-medium rounded-md bg-white shadow text-gray-800 transition";
+                editor.classList.add('hidden');
+                preview.classList.remove('hidden');
+                updatePreview();
+            }
+        }
+
+        function updatePreview() {
+            const html = document.getElementById('mail-body').value;
+            const iframe = document.getElementById('mail-preview');
+            iframe.srcdoc = html;
+        }
+
+        async function sendEmail() {
+            const btn = document.getElementById('send-btn');
+            const originalText = btn.innerHTML;
+            
+            const recipient = document.getElementById('mail-to').value;
+            const subject = document.getElementById('mail-subject').value;
+            const body = document.getElementById('mail-body').value;
+            const from = document.getElementById('mail-from').value;
+            const smtpId = document.getElementById('smtp-select').value;
+
+            if (!recipient || !subject || !body) {
+                showToast(I18n.t('send.toast.missing_info'), 'error');
+                return;
+            }
+
+            btn.disabled = true;
+            const sendingText = I18n.t('send.btn_sending');
+            btn.innerHTML = `<svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> ${sendingText}`;
+
+            try {
+                // 构建请求体
+                const payload = {
+                    to: recipient,
+                    subject: subject,
+                    body: body,
+                    from: from 
+                };
+                
+                if (smtpId !== 'direct') {
+                    payload.channel_id = parseInt(smtpId);
+                }
+
+                await request('/send', { method: 'POST', body: JSON.stringify(payload) });
+                showToast(I18n.t('send.toast.success'));
+                
+                // 3秒后跳转日志页
+                setTimeout(() => {
+                    window.location.href = '/dashboard/logs.html';
+                }, 1500);
+
+            } catch (err) {
+                // showToast 在 request 内部已经调用了
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+
+        // 等待 I18n 初始化
+        if (typeof I18n !== 'undefined' && I18n.isReady) {
+            init();
+        } else {
+            document.addEventListener('i18n-ready', init);
+        }
+    </script>
+</body>
+</html>

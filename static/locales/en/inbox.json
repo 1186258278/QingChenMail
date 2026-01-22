@@ -1,0 +1,9 @@
+{
+    "inbox.title": "Inbox",
+    "inbox.subtitle": "View received reply emails",
+    "inbox.empty": "No messages found",
+    "inbox.no_subject": "(No Subject)",
+    "inbox.from": "From:",
+    "inbox.to": "To:",
+    "inbox.select_msg": "Select a message to view details"
+}

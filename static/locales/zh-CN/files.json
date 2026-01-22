@@ -1,0 +1,22 @@
+{
+    "files.title": "文件管理",
+    "files.subtitle": "管理 API 上传及下载的附件文件",
+    "files.btn.batch_delete": "批量删除",
+    "files.btn.refresh": "刷新列表",
+    "files.table.name": "文件名",
+    "files.table.size": "大小",
+    "files.table.source": "来源",
+    "files.table.related": "关联信息",
+    "files.table.created_at": "上传时间",
+    "files.table.actions": "操作",
+    "files.table.empty": "暂无文件记录",
+    "files.source.url": "远程下载",
+    "files.source.api": "API 上传",
+    "files.action.download": "下载",
+    "files.action.delete": "删除",
+    "files.btn.delete_selected": "删除选中的 {count} 个文件",
+    "files.alert.delete_confirm": "确定要删除此文件吗？删除后将无法恢复，且已发送邮件中的附件链接可能失效（如果是远程下载的）。",
+    "files.toast.deleted": "文件已删除",
+    "files.alert.batch_delete_confirm": "确定要删除选中的 {count} 个文件吗？",
+    "files.toast.batch_deleted": "批量删除成功"
+}

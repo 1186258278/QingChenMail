@@ -1,0 +1,213 @@
+package main
+
+import (
+	"embed"
+	"flag"
+	"fmt"
+	"io/fs"
+	"log"
+	"net/http"
+	"os"
+
+	"goemail/internal/api"
+	"goemail/internal/config"
+	"goemail/internal/database"
+	"goemail/internal/mailer"
+	"goemail/internal/receiver"
+
+	"github.com/gin-gonic/gin"
+)
+
+//go:embed static/*
+var staticFiles embed.FS
+
+func main() {
+	// 命令行参数
+	resetPwd := flag.Bool("reset", false, "Reset admin password to 123456")
+	flag.Parse()
+
+	// 1. 加载配置
+	config.LoadConfig()
+
+	// 2. 初始化数据库
+	database.InitDB()
+
+	// 处理重置密码指令
+	if *resetPwd {
+		var user database.User
+		if err := database.DB.Where("username = ?", "admin").First(&user).Error; err == nil {
+			user.Password = "123456"
+			database.DB.Save(&user)
+			fmt.Println("[SUCCESS] Admin password has been reset to: 123456")
+		} else {
+			// 如果用户不存在，创建它
+			user = database.User{Username: "admin", Password: "123456"}
+			database.DB.Create(&user)
+			fmt.Println("[SUCCESS] Admin user created with password: 123456")
+		}
+		os.Exit(0)
+	}
+
+	// 启动邮件发送队列 Worker
+	mailer.StartQueueWorker()
+
+	// 启动 SMTP 接收服务 (邮件转发)
+	receiver.StartReceiver()
+
+	// 启动营销任务调度器 (定时发送)
+	api.StartCampaignScheduler()
+
+	// 3. 设置 Gin
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.Default()
+
+	// 4. API 路由
+	apiGroup := r.Group("/api/v1")
+	{
+		// 公开接口
+		apiGroup.POST("/login", api.LoginHandler)
+		apiGroup.GET("/captcha", api.CaptchaHandler)
+		apiGroup.GET("/wallpaper", api.WallpaperHandler)
+
+		// 追踪接口 (公开)
+		apiGroup.GET("/track/open/:id", api.TrackOpenHandler)
+		apiGroup.GET("/track/click/:id", api.TrackClickHandler)
+		apiGroup.GET("/track/unsubscribe/:id", api.UnsubscribeHandler)
+
+		// 需要认证的接口 (支持 JWT 或 API Key)
+		authorized := apiGroup.Group("/")
+		authorized.Use(api.AuthMiddleware())
+		{
+			// 发送接口 (现在受保护)
+			authorized.POST("/send", api.SendHandler)
+
+			authorized.GET("/stats", api.StatsHandler)
+			authorized.GET("/logs", api.LogsHandler)
+			authorized.POST("/config/dkim", api.GenerateDKIMHandler)
+			authorized.GET("/config", api.GetConfigHandler)
+			authorized.POST("/config", api.UpdateConfigHandler)
+			authorized.POST("/config/test-port", api.TestPortHandler)
+			authorized.POST("/config/kill-process", api.KillProcessHandler) // 新增
+			authorized.POST("/password", api.ChangePasswordHandler)
+			authorized.GET("/backup", api.BackupHandler)
+			
+			// SMTP 管理
+			authorized.POST("/smtp", api.CreateSMTPHandler)
+			authorized.GET("/smtp", api.ListSMTPHandler)
+			authorized.PUT("/smtp/:id", api.UpdateSMTPHandler)
+			authorized.DELETE("/smtp/:id", api.DeleteSMTPHandler)
+
+			// 域名管理
+			authorized.POST("/domains", api.CreateDomainHandler)
+			authorized.GET("/domains", api.ListDomainHandler)
+			authorized.PUT("/domains/:id", api.UpdateDomainHandler) // 新增 Update
+			authorized.DELETE("/domains/:id", api.DeleteDomainHandler)
+			authorized.POST("/domains/:id/verify", api.VerifyDomainHandler)
+
+			// 模板管理
+			authorized.POST("/templates", api.CreateTemplateHandler)
+			authorized.GET("/templates", api.ListTemplateHandler)
+			authorized.PUT("/templates/:id", api.UpdateTemplateHandler)
+			authorized.DELETE("/templates/:id", api.DeleteTemplateHandler)
+
+			// 密钥管理
+			authorized.GET("/keys", api.ListAPIKeysHandler)
+			authorized.POST("/keys", api.CreateAPIKeyHandler)
+			authorized.DELETE("/keys/:id", api.DeleteAPIKeyHandler)
+
+			// 文件管理
+			authorized.GET("/files", api.ListFilesHandler)
+			authorized.GET("/files/:id/download", api.DownloadFileHandler)
+			authorized.DELETE("/files/:id", api.DeleteFileHandler)
+			authorized.POST("/files/batch_delete", api.BatchDeleteFilesHandler)
+
+			// 转发规则管理
+			authorized.GET("/forward-rules", api.ListForwardRulesHandler)      // ?domain_id=xxx
+			authorized.POST("/forward-rules", api.CreateForwardRuleHandler)    // body: {domain_id, ...}
+			authorized.PUT("/forward-rules/:id", api.UpdateForwardRuleHandler)
+			authorized.DELETE("/forward-rules/:id", api.DeleteForwardRuleHandler)
+			authorized.POST("/forward-rules/:id/toggle", api.ToggleForwardRuleHandler)
+			
+			// 转发日志
+			authorized.GET("/forward-logs", api.ListForwardLogsHandler)
+			authorized.GET("/forward-stats", api.GetForwardStatsHandler)
+
+			// 联系人管理
+			authorized.GET("/contacts/groups", api.ListContactGroupsHandler)
+			authorized.POST("/contacts/groups", api.CreateContactGroupHandler)
+			authorized.PUT("/contacts/groups/:id", api.UpdateContactGroupHandler)
+			authorized.DELETE("/contacts/groups/:id", api.DeleteContactGroupHandler)
+
+			authorized.GET("/contacts", api.ListContactsHandler)
+			authorized.POST("/contacts", api.CreateContactHandler)
+			authorized.POST("/contacts/import", api.ImportContactsHandler)
+			authorized.DELETE("/contacts/:id", api.DeleteContactHandler)
+
+			// 营销活动管理
+			authorized.GET("/campaigns", api.ListCampaignsHandler)
+			authorized.POST("/campaigns", api.CreateCampaignHandler)
+			authorized.PUT("/campaigns/:id", api.UpdateCampaignHandler)
+			authorized.DELETE("/campaigns/:id", api.DeleteCampaignHandler)
+			authorized.POST("/campaigns/:id/start", api.StartCampaignHandler)
+
+			// 收件箱
+			authorized.GET("/inbox", api.ListInboxHandler)
+			authorized.GET("/inbox/:id", api.GetInboxItemHandler)
+			authorized.DELETE("/inbox/:id", api.DeleteInboxItemHandler)
+		}
+	}
+
+	// 5. 静态文件服务
+	// 嵌入式静态文件 (UI)
+	staticFS, err := fs.Sub(staticFiles, "static")
+	if err != nil {
+		log.Fatal(err)
+	}
+	r.StaticFS("/dashboard", http.FS(staticFS))
+	
+	// 本地静态文件 (壁纸缓存)
+	// 挂载到 /wallpapers 路径，避免与 /dashboard 通配符冲突
+	r.Static("/wallpapers", "./static/wallpapers")
+	// 兼容根路径资源请求 (fix 404)
+	r.GET("/css/*filepath", func(c *gin.Context) {
+		c.FileFromFS("static/css/"+c.Param("filepath"), http.FS(staticFiles))
+	})
+	r.GET("/js/*filepath", func(c *gin.Context) {
+		c.FileFromFS("static/js/"+c.Param("filepath"), http.FS(staticFiles))
+	})
+
+	// 单独提供 login.html，方便访问
+	r.GET("/login.html", func(c *gin.Context) {
+		c.FileFromFS("static/login.html", http.FS(staticFiles))
+	})
+
+	// 根路径重定向到 dashboard
+	r.GET("/", func(c *gin.Context) {
+		c.Redirect(http.StatusMovedPermanently, "/dashboard/")
+	})
+
+	// 6. 启动服务
+	port := config.AppConfig.Port
+	if port == "" {
+		port = "9901"
+	}
+	host := config.AppConfig.Host
+	if host == "" {
+		host = "0.0.0.0"
+	}
+	addr := fmt.Sprintf("%s:%s", host, port)
+	
+	fmt.Printf("QingChen Mail server starting on %s...\n", addr)
+	
+	if config.AppConfig.EnableSSL && config.AppConfig.CertFile != "" && config.AppConfig.KeyFile != "" {
+		fmt.Printf("SSL Enabled. Dashboard: https://%s:%s/dashboard/\n", host, port)
+		if err := r.RunTLS(addr, config.AppConfig.CertFile, config.AppConfig.KeyFile); err != nil {
+			log.Fatal("SSL Start Failed: ", err)
+		}
+	} else {
+		fmt.Printf("Dashboard: http://%s:%s/dashboard/\n", host, port)
+		if err := r.Run(addr); err != nil {
+			log.Fatal(err)
+		}
+	}
+}

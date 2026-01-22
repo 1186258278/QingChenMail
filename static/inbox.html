@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>收件箱 - 晴辰云邮</title>
+    <link href="/dashboard/css/tailwind.min.css?v=8.0" rel="stylesheet">
+    <script src="/dashboard/js/common.js?v=8.0"></script>
+    <script src="/dashboard/js/layout.js?v=8.0"></script>
+</head>
+<body class="hidden" data-i18n-module="inbox">
+    <div class="mb-8 flex justify-between items-center">
+        <div>
+            <h2 class="text-3xl font-bold text-gray-800" data-i18n="inbox.title">收件箱</h2>
+            <p class="text-gray-500 mt-1" data-i18n="inbox.subtitle">查看接收到的回复邮件</p>
+        </div>
+        <div class="flex space-x-2">
+            <input type="text" id="search-input" placeholder="搜索主题或发件人..." class="border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500 text-sm w-64" onkeyup="if(event.key==='Enter') loadInbox()">
+            <button onclick="loadInbox()" class="bg-gray-100 text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-200 transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            </button>
+        </div>
+    </div>
+
+    <div class="flex h-[calc(100vh-200px)] gap-6">
+        <!-- 邮件列表 -->
+        <div class="w-1/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col">
+            <div id="inbox-list" class="flex-1 overflow-y-auto divide-y divide-gray-100">
+                <!-- 动态生成 -->
+            </div>
+            <div class="p-4 border-t border-gray-100 flex justify-between items-center bg-gray-50 rounded-b-xl">
+                <button onclick="changePage(-1)" class="text-gray-500 hover:text-blue-600 disabled:opacity-30" id="prev-btn">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                </button>
+                <span class="text-xs text-gray-400" id="page-info">1 / 1</span>
+                <button onclick="changePage(1)" class="text-gray-500 hover:text-blue-600 disabled:opacity-30" id="next-btn">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- 邮件详情 -->
+        <div class="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 p-8 overflow-y-auto flex flex-col relative">
+            <div id="empty-state" class="flex flex-col items-center justify-center h-full text-gray-400">
+                <svg class="w-16 h-16 mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                <p data-i18n="inbox.select_msg">选择一封邮件查看详情</p>
+            </div>
+            
+            <div id="message-content" class="hidden">
+                <div class="border-b border-gray-100 pb-6 mb-6">
+                    <div class="flex justify-between items-start mb-4">
+                        <h1 class="text-2xl font-bold text-gray-800" id="msg-subject"></h1>
+                        <button onclick="deleteMessage()" class="text-red-500 hover:bg-red-50 p-2 rounded-lg transition" title="删除">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </div>
+                    <div class="flex items-center text-sm text-gray-500 space-x-4">
+                        <div class="flex items-center">
+                            <span class="font-medium text-gray-700 mr-2" data-i18n="inbox.from">发件人:</span>
+                            <span id="msg-from" class="bg-gray-100 px-2 py-0.5 rounded"></span>
+                        </div>
+                        <div class="flex items-center">
+                            <span class="font-medium text-gray-700 mr-2" data-i18n="inbox.to">收件人:</span>
+                            <span id="msg-to"></span>
+                        </div>
+                        <div class="flex-1 text-right" id="msg-date"></div>
+                    </div>
+                </div>
+                <div class="prose max-w-none text-gray-800 leading-relaxed" id="msg-body">
+                    <!-- 邮件正文 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        Auth.check();
+
+        let currentPage = 1;
+        const limit = 20;
+        let currentMsgId = null;
+
+        async function init() {
+            await loadInbox();
+        }
+
+        async function loadInbox() {
+            const q = document.getElementById('search-input').value;
+            try {
+                const res = await request(`/inbox?page=${currentPage}&limit=${limit}&q=${encodeURIComponent(q)}`);
+                const container = document.getElementById('inbox-list');
+                container.innerHTML = '';
+
+                if (res.items.length === 0) {
+                    container.innerHTML = `
+                        <div class="p-8 text-center text-gray-400 text-sm">
+                            ${I18n.t('inbox.empty')}
+                        </div>`;
+                } else {
+                    res.items.forEach(msg => {
+                        const div = document.createElement('div');
+                        div.className = `p-4 hover:bg-blue-50 cursor-pointer transition relative group ${msg.id === currentMsgId ? 'bg-blue-50 border-l-4 border-blue-500 pl-3' : 'border-l-4 border-transparent pl-3'}`;
+                        if (!msg.is_read) div.classList.add('font-medium');
+                        
+                        div.onclick = () => loadMessage(msg.id);
+                        div.innerHTML = `
+                            <div class="flex justify-between mb-1">
+                                <span class="text-sm text-gray-800 truncate w-2/3" title="${msg.from_addr}">${msg.from_addr}</span>
+                                <span class="text-xs text-gray-400 whitespace-nowrap">${formatDate(msg.created_at)}</span>
+                            </div>
+                            <h4 class="text-sm text-gray-600 truncate mb-1">${msg.subject || I18n.t('inbox.no_subject')}</h4>
+                            <p class="text-xs text-gray-400 truncate">To: ${msg.to_addr}</p>
+                            ${!msg.is_read ? '<span class="absolute top-4 right-4 w-2 h-2 bg-blue-600 rounded-full"></span>' : ''}
+                        `;
+                        container.appendChild(div);
+                    });
+                }
+
+                // 分页控制
+                const totalPages = Math.ceil(res.total / limit) || 1;
+                document.getElementById('page-info').innerText = `${currentPage} / ${totalPages}`;
+                document.getElementById('prev-btn').disabled = currentPage <= 1;
+                document.getElementById('next-btn').disabled = currentPage >= totalPages;
+
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function changePage(delta) {
+            currentPage += delta;
+            loadInbox();
+        }
+
+        async function loadMessage(id) {
+            currentMsgId = id;
+            try {
+                // 重新加载列表以更新选中状态和已读状态
+                // 优化：可以只更新 DOM，但在列表刷新时已读状态会自动更新
+                
+                const msg = await request(`/inbox/${id}`);
+                
+                document.getElementById('empty-state').classList.add('hidden');
+                document.getElementById('message-content').classList.remove('hidden');
+                
+                document.getElementById('msg-subject').innerText = msg.subject || I18n.t('inbox.no_subject');
+                document.getElementById('msg-from').innerText = msg.from_addr;
+                document.getElementById('msg-to').innerText = msg.to_addr;
+                document.getElementById('msg-date').innerText = new Date(msg.created_at).toLocaleString();
+                
+                // 简单的 HTML 处理，防止 XSS
+                // 实际上邮件正文可能包含 HTML，这里直接设置 innerHTML 有风险
+                // 生产环境应使用 DOMPurify
+                // 这里我们假设后端存的是清洗过的或仅文本，或者信任内容
+                // 如果是纯文本，将其包装在 pre 中
+                if (msg.body && (msg.body.includes('<html') || msg.body.includes('<div') || msg.body.includes('<p'))) {
+                     document.getElementById('msg-body').innerHTML = msg.body;
+                } else {
+                     document.getElementById('msg-body').innerText = msg.body || '(无内容)';
+                     document.getElementById('msg-body').style.whiteSpace = 'pre-wrap';
+                }
+
+                // 标记列表项为已读 (重新加载列表)
+                loadInbox();
+
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        async function deleteMessage() {
+            if (!currentMsgId || !confirm(I18n.t('common.confirm_delete'))) return;
+            try {
+                await request(`/inbox/${currentMsgId}`, { method: 'DELETE' });
+                showToast(I18n.t('common.deleted'));
+                currentMsgId = null;
+                document.getElementById('empty-state').classList.remove('hidden');
+                document.getElementById('message-content').classList.add('hidden');
+                loadInbox();
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            const now = new Date();
+            if (date.toDateString() === now.toDateString()) {
+                return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            }
+            return date.toLocaleDateString([], { month: 'numeric', day: 'numeric' });
+        }
+
+        // 等待 I18n 就绪后再初始化页面，否则 I18n.t 可能返回空
+        if (typeof I18n !== 'undefined' && I18n.isReady) {
+            init();
+        } else {
+            document.addEventListener('i18n-ready', init);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+    "inbox.title": "收件箱",
+    "inbox.subtitle": "查看接收到的回复邮件",
+    "inbox.empty": "暂无邮件",
+    "inbox.no_subject": "(无主题)",
+    "inbox.from": "发件人:",
+    "inbox.to": "收件人:",
+    "inbox.select_msg": "选择一封邮件查看详情"
+}

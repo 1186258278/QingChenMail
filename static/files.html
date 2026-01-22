@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>文件管理 - 晴辰云邮</title>
+    <link href="/dashboard/css/tailwind.min.css?v=8.0" rel="stylesheet">
+    <script src="/dashboard/js/common.js?v=8.0"></script>
+    <script src="/dashboard/js/layout.js?v=8.0"></script>
+</head>
+<body class="hidden" data-i18n-module="files">
+    <div class="mb-8 flex justify-between items-center">
+        <div>
+            <h2 class="text-3xl font-bold text-gray-800" data-i18n="files.title">文件管理</h2>
+            <p class="text-gray-500 mt-1" data-i18n="files.subtitle">管理 API 上传及下载的附件文件</p>
+        </div>
+        <div class="flex space-x-3">
+            <button onclick="batchDelete()" id="btn-batch-del" class="hidden bg-red-100 text-red-600 hover:bg-red-200 px-4 py-2 rounded-lg font-medium transition flex items-center">
+                <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                <span data-i18n="files.btn.batch_delete">批量删除</span>
+            </button>
+            <button onclick="loadFiles()" class="bg-white border border-gray-300 text-gray-600 hover:bg-gray-50 px-4 py-2 rounded-lg font-medium transition" data-i18n="files.btn.refresh">
+                刷新列表
+            </button>
+        </div>
+    </div>
+
+    <!-- 列表 -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <table class="w-full text-left">
+            <thead class="bg-gray-50 text-gray-500 text-xs uppercase font-semibold">
+                <tr>
+                    <th class="px-6 py-4 w-10">
+                        <input type="checkbox" id="check-all" onclick="toggleAll(this)" class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                    </th>
+                    <th class="px-6 py-4" data-i18n="files.table.name">文件名</th>
+                    <th class="px-6 py-4" data-i18n="files.table.size">大小</th>
+                    <th class="px-6 py-4" data-i18n="files.table.source">来源</th>
+                    <th class="px-6 py-4" data-i18n="files.table.related">关联信息</th>
+                    <th class="px-6 py-4" data-i18n="files.table.created_at">上传时间</th>
+                    <th class="px-6 py-4 text-right" data-i18n="files.table.actions">操作</th>
+                </tr>
+            </thead>
+            <tbody id="files-list" class="divide-y divide-gray-100 text-sm text-gray-700">
+                <!-- JS 渲染 -->
+            </tbody>
+        </table>
+        <div id="empty-state" class="hidden p-12 text-center text-gray-400">
+            <svg class="w-16 h-16 mx-auto mb-4 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            <p data-i18n="files.table.empty">暂无文件记录</p>
+        </div>
+    </div>
+
+    <script>
+        Auth.check();
+
+        let allFiles = [];
+        let selectedIds = new Set();
+
+        async function loadFiles() {
+            try {
+                const list = await request('/files');
+                allFiles = list;
+                renderList();
+            } catch (e) {}
+        }
+
+        function renderList() {
+            const tbody = document.getElementById('files-list');
+            const emptyState = document.getElementById('empty-state');
+            tbody.innerHTML = '';
+            selectedIds.clear();
+            updateBatchBtn();
+            document.getElementById('check-all').checked = false;
+
+            if (allFiles.length === 0) {
+                emptyState.classList.remove('hidden');
+                // Force render empty state translation
+                if (typeof I18n !== 'undefined' && I18n.isReady) I18n.render();
+                return;
+            }
+            emptyState.classList.add('hidden');
+
+            allFiles.forEach(file => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-gray-50 transition';
+                
+                // 来源标签
+                let sourceBadge = '';
+                if (file.source === 'api_url') {
+                    sourceBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800">${I18n.t('files.source.url')}</span>`;
+                } else {
+                    sourceBadge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">${I18n.t('files.source.api')}</span>`;
+                }
+
+                // 下载链接 (利用 api 代理鉴权)
+                const downloadUrl = `/api/v1/files/${file.id}/download`;
+                const dlText = I18n.t('files.action.download');
+                const delText = I18n.t('files.action.delete');
+
+                tr.innerHTML = `
+                    <td class="px-6 py-4">
+                        <input type="checkbox" value="${file.id}" onclick="toggleSelect(${file.id})" class="file-check rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="flex items-center">
+                            <svg class="w-5 h-5 text-gray-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                            <a href="${downloadUrl}" target="_blank" class="font-medium text-gray-900 hover:text-blue-600 truncate max-w-xs block" title="${file.filename}">${Utils.escapeHtml(file.filename)}</a>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 text-gray-500 font-mono text-xs">${formatSize(file.file_size)}</td>
+                    <td class="px-6 py-4">${sourceBadge}</td>
+                    <td class="px-6 py-4 text-gray-500 text-xs truncate max-w-[150px]" title="${file.related_to}">${Utils.escapeHtml(file.related_to || '-')}</td>
+                    <td class="px-6 py-4 text-gray-500 text-xs">${Utils.formatDate(file.created_at)}</td>
+                    <td class="px-6 py-4 text-right space-x-2">
+                        <a href="${downloadUrl}" target="_blank" class="text-blue-600 hover:text-blue-800 text-sm font-medium">${dlText}</a>
+                        <button onclick="deleteFile(${file.id})" class="text-red-600 hover:text-red-800 text-sm font-medium">${delText}</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+            if (typeof I18n !== 'undefined' && I18n.isReady) I18n.render();
+        }
+
+        function formatSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function toggleSelect(id) {
+            if (selectedIds.has(id)) {
+                selectedIds.delete(id);
+            } else {
+                selectedIds.add(id);
+            }
+            updateBatchBtn();
+        }
+
+        function toggleAll(el) {
+            const checks = document.querySelectorAll('.file-check');
+            checks.forEach(c => {
+                c.checked = el.checked;
+                const id = parseInt(c.value);
+                if (el.checked) selectedIds.add(id);
+                else selectedIds.delete(id);
+            });
+            updateBatchBtn();
+        }
+
+        function updateBatchBtn() {
+            const btn = document.getElementById('btn-batch-del');
+            if (selectedIds.size > 0) {
+                btn.classList.remove('hidden');
+                btn.innerHTML = `<svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg> ${I18n.t('files.btn.delete_selected', {count: selectedIds.size})}`;
+            } else {
+                btn.classList.add('hidden');
+            }
+        }
+
+        async function deleteFile(id) {
+            if (!confirm(I18n.t('files.alert.delete_confirm'))) return;
+            try {
+                await request(`/files/${id}`, { method: 'DELETE' });
+                showToast(I18n.t('files.toast.deleted'));
+                loadFiles();
+            } catch (e) {}
+        }
+
+        async function batchDelete() {
+            if (!confirm(I18n.t('files.alert.batch_delete_confirm', {count: selectedIds.size}))) return;
+            try {
+                await request('/files/batch_delete', {
+                    method: 'POST',
+                    body: JSON.stringify({ ids: Array.from(selectedIds) })
+                });
+                showToast(I18n.t('files.toast.batch_deleted'));
+                loadFiles();
+            } catch (e) {}
+        }
+
+        loadFiles();
+    </script>
+</body>
+</html>
