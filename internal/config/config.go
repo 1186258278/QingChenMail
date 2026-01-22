@@ -6,12 +6,11 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
-	mathrand "math/rand"
+	"math/big"
 	"os"
-	"time"
 )
 
-const Version = "v1.0.2"
+const Version = "v1.0.3"
 
 type Config struct {
 	Domain         string `json:"domain"`
@@ -45,13 +44,16 @@ func LoadConfig() {
 		Port:         "9901",
 		BaseURL:      "", // 默认留空，运行时自动推断
 		EnableSSL:    false,
-		JWTSecret:    "goemail-secret-" + generateRandomString(16),
+		JWTSecret:    "", // 默认留空，强制在后续逻辑中生成
 	}
 
 	file, err := os.Open("config.json")
 	if err != nil {
 		// 如果配置文件不存在，则使用默认值
 		// 并立即保存一次以持久化随机生成的 Secret
+		if AppConfig.JWTSecret == "" {
+			AppConfig.JWTSecret = generateRandomKey(32)
+		}
 		SaveConfig(AppConfig)
 		return
 	}
@@ -65,8 +67,18 @@ func LoadConfig() {
 	// --- 自动校准/补全配置 ---
 
 	// 1. JWT Secret
-	if AppConfig.JWTSecret == "" {
-		AppConfig.JWTSecret = "goemail-secret-" + generateRandomString(16)
+	// 如果为空，或检测到是已知的硬编码/弱密钥，则轮换
+	weakKeys := []string{"goemail-secret-NNbCVZcJcaOOTmAm", "change-this-secret", "goemail-secret-"}
+	isWeak := false
+	for _, k := range weakKeys {
+		if AppConfig.JWTSecret == k || (len(AppConfig.JWTSecret) < 20 && len(AppConfig.JWTSecret) > 0) {
+			isWeak = true
+			break
+		}
+	}
+
+	if AppConfig.JWTSecret == "" || isWeak {
+		AppConfig.JWTSecret = generateRandomKey(32)
 		needsSave = true
 	}
 
@@ -97,7 +109,8 @@ func LoadConfig() {
 }
 
 func SaveConfig(cfg Config) error {
-	file, err := os.Create("config.json")
+	// 使用 0600 权限创建文件，仅当前用户可读写
+	file, err := os.OpenFile("config.json", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
 	}
@@ -108,14 +121,20 @@ func SaveConfig(cfg Config) error {
 	return encoder.Encode(cfg)
 }
 
-func generateRandomString(n int) string {
+// 使用 crypto/rand 生成安全随机字符串
+func generateRandomKey(n int) string {
 	const letters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-	mathrand.Seed(time.Now().UnixNano())
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = letters[mathrand.Intn(len(letters))]
+	ret := make([]byte, n)
+	for i := 0; i < n; i++ {
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
+		if err != nil {
+			// Fallback if crypto/rand fails (unlikely)
+			ret[i] = letters[i%len(letters)]
+			continue
+		}
+		ret[i] = letters[num.Int64()]
 	}
-	return string(b)
+	return "goemail-secret-" + string(ret)
 }
 
 func generateDKIMKey() (string, error) {

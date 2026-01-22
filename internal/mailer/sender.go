@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/smtp"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -88,8 +89,24 @@ func SendEmail(req SendRequest) error {
 				}
 				data = fileData
 			} else {
-				// 3. 尝试从远程 URL 下载
-				resp, err := http.Get(att.URL)
+				// 3. 尝试从远程 URL 下载 (SSRF 防护)
+				// 创建安全的 HTTP Client
+				client := &http.Client{
+					Timeout: 10 * time.Second,
+					Transport: &http.Transport{
+						DialContext: (&net.Dialer{
+							Timeout:   5 * time.Second,
+							KeepAlive: 30 * time.Second,
+						}).DialContext,
+					},
+				}
+
+				// 检查 URL 是否指向内网
+				if isInternalURL(att.URL) {
+					return logAndReturnError(req, fmt.Sprintf("blocked_internal_url: %s", att.URL), fmt.Errorf("access to internal network is blocked"))
+				}
+
+				resp, err := client.Get(att.URL)
 				if err != nil {
 					return logAndReturnError(req, fmt.Sprintf("failed_download_attachment: %s", att.URL), err)
 				}
@@ -99,7 +116,9 @@ func SendEmail(req SendRequest) error {
 					return logAndReturnError(req, fmt.Sprintf("failed_download_attachment_status_%d", resp.StatusCode), fmt.Errorf("status %d", resp.StatusCode))
 				}
 				
-				data, err = io.ReadAll(resp.Body)
+				// 限制大小 (例如 10MB)
+				const MaxDownloadSize = 10 * 1024 * 1024
+				data, err = io.ReadAll(io.LimitReader(resp.Body, MaxDownloadSize))
 				if err != nil {
 					return logAndReturnError(req, "failed_read_attachment_body", err)
 				}
@@ -187,6 +206,27 @@ func SendEmail(req SendRequest) error {
 	}
 }
 
+// isInternalURL 检查 URL 是否指向内网 (SSRF防护)
+func isInternalURL(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return true // 解析失败视为不安全
+	}
+	
+	host := u.Hostname()
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return true // DNS 解析失败视为不安全
+	}
+
+	for _, ip := range ips {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+			return true
+		}
+	}
+	return false
+}
+
 // sendByRelay 包装器
 func sendByRelay(req SendRequest, from, to string, msg []byte, channelID uint) error {
 	var cfg database.SMTPConfig
@@ -201,10 +241,14 @@ func sendWithSMTPConfig(req SendRequest, from, to string, msg []byte, cfg databa
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	auth := smtp.PlainAuth("", cfg.Username, cfg.Password, cfg.Host)
 
-	// 处理 SSL/TLS
+	// [安全修复] 默认强制 TLS 验证，除非明确需要跳过
+	// 为了兼容性，我们暂时使用 InsecureSkipVerify: false (安全模式)
+	// 如果用户使用的是自签名证书，需要在 SMTP 配置中添加 SkipVerify 选项 (DB Schema 需升级)
+	// 鉴于本次是代码修复，先设为 false，提升安全性。
+	tlsConfig := &tls.Config{InsecureSkipVerify: false, ServerName: cfg.Host}
+
 	if cfg.SSL {
 		// 隐式 SSL (通常端口 465)
-		tlsConfig := &tls.Config{InsecureSkipVerify: true, ServerName: cfg.Host}
 		conn, err := tls.Dial("tcp", addr, tlsConfig)
 		if err != nil {
 			return logAndReturnError(req, "smtp_tls_dial_failed", err)
@@ -237,9 +281,40 @@ func sendWithSMTPConfig(req SendRequest, from, to string, msg []byte, cfg databa
 			return logAndReturnError(req, "smtp_close_failed", err)
 		}
 	} else {
-		// StartTLS 或 明文 (通常端口 25/587)
-		if err := smtp.SendMail(addr, auth, from, []string{to}, msg); err != nil {
-			return logAndReturnError(req, "smtp_send_error", err)
+		// 显式 STARTTLS (通常端口 587)
+		// 覆盖 smtp.SendMail 以强制使用我们的 tlsConfig (smtp.SendMail 默认会尝试 StartTLS 但使用默认 InsecureSkipVerify=true 如果没有提供 config)
+		// 标准库 smtp.SendMail 不接受 tlsConfig，所以我们必须手动实现 Dial/StartTLS
+		
+		c, err := smtp.Dial(addr)
+		if err != nil {
+			return logAndReturnError(req, "smtp_dial_failed", err)
+		}
+		defer c.Quit()
+
+		if ok, _ := c.Extension("STARTTLS"); ok {
+			if err = c.StartTLS(tlsConfig); err != nil {
+				return logAndReturnError(req, "smtp_starttls_failed", err)
+			}
+		}
+
+		if err = c.Auth(auth); err != nil {
+			return logAndReturnError(req, "smtp_auth_failed", err)
+		}
+		if err = c.Mail(from); err != nil {
+			return logAndReturnError(req, "smtp_mail_from_failed", err)
+		}
+		if err = c.Rcpt(to); err != nil {
+			return logAndReturnError(req, "smtp_rcpt_to_failed", err)
+		}
+		w, err := c.Data()
+		if err != nil {
+			return logAndReturnError(req, "smtp_data_failed", err)
+		}
+		if _, err = w.Write(msg); err != nil {
+			return logAndReturnError(req, "smtp_write_failed", err)
+		}
+		if err = w.Close(); err != nil {
+			return logAndReturnError(req, "smtp_close_failed", err)
 		}
 	}
 
@@ -287,8 +362,9 @@ func sendByDirect(req SendRequest, from, to string, msg []byte) error {
 			}
 		}
 
-		// 尝试 StartTLS，但不强制
+		// 尝试 StartTLS
 		if ok, _ := c.Extension("STARTTLS"); ok {
+			// Direct Send 连接对方 MX，无法预知证书情况，通常保持 InsecureSkipVerify: true
 			_ = c.StartTLS(&tls.Config{InsecureSkipVerify: true, ServerName: host})
 		}
 

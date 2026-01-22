@@ -34,6 +34,59 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+var (
+	latestReleaseCache interface{}
+	latestReleaseTime  time.Time
+	releaseMutex       sync.Mutex
+)
+
+// CheckUpdateHandler 检查 GitHub 更新 (带缓存的后端代理)
+func CheckUpdateHandler(c *gin.Context) {
+	releaseMutex.Lock()
+	defer releaseMutex.Unlock()
+
+	// 缓存有效期 1 小时
+	if time.Since(latestReleaseTime) < time.Hour && latestReleaseCache != nil {
+		c.JSON(http.StatusOK, latestReleaseCache)
+		return
+	}
+
+	// 创建带超时的客户端
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get("https://api.github.com/repos/1186258278/QingChenMail/releases/latest")
+	if err != nil {
+		// 如果失败且有缓存，返回旧缓存
+		if latestReleaseCache != nil {
+			c.JSON(http.StatusOK, latestReleaseCache)
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch update"})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		// 处理限流等情况，如果有限流，尝试返回旧缓存
+		if latestReleaseCache != nil {
+			c.JSON(http.StatusOK, latestReleaseCache)
+			return
+		}
+		// 读取错误信息以便调试 (可选)
+		c.JSON(resp.StatusCode, gin.H{"error": "GitHub API error"})
+		return
+	}
+
+	var result interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse response"})
+		return
+	}
+
+	latestReleaseCache = result
+	latestReleaseTime = time.Now()
+	c.JSON(http.StatusOK, result)
+}
+
 // AuthMiddleware 认证中间件
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -64,6 +117,19 @@ func AuthMiddleware() gin.HandlerFunc {
 		if strings.HasPrefix(tokenString, "sk_") {
 			var apiKey database.APIKey
 			if err := database.DB.Where("key = ?", tokenString).First(&apiKey).Error; err == nil {
+				// 权限限制：API Key 仅用于发送邮件和获取统计，禁止管理操作
+				// 简单的基于路径的权限控制
+				path := c.Request.URL.Path
+				allowed := strings.HasPrefix(path, "/api/v1/send") || 
+						   strings.HasPrefix(path, "/api/v1/stats") ||
+						   strings.HasPrefix(path, "/api/v1/files") // 允许上传附件
+
+				if !allowed {
+					c.JSON(http.StatusForbidden, gin.H{"error": "API Key does not have permission to access this endpoint"})
+					c.Abort()
+					return
+				}
+
 				// 更新最后使用时间
 				now := time.Now()
 				database.DB.Model(&apiKey).Update("last_used", &now)
@@ -117,7 +183,7 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
-	// 2. 密码校验 (支持明文/Hash 自动升级)
+	// 2. 密码校验 (支持明文/Hash/Bcrypt 自动升级)
 	var user database.User
 	if err := database.DB.Where("username = ?", req.Username).First(&user).Error; err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
@@ -126,29 +192,41 @@ func LoginHandler(c *gin.Context) {
 
 	passwordMatched := false
 	dbPass := user.Password
-	inputPass := req.Password
+	inputPass := req.Password // 前端可能会传明文，也可能传 SHA256 (取决于前端逻辑，旧版可能传了 Hash)
 
-	// 判断输入是否为 SHA256 (64 hex chars)
-	isInputHash := len(inputPass) == 64 && isHex(inputPass)
-
-	if dbPass == inputPass {
-		// 直接匹配（数据库是明文且输入是明文，或数据库是Hash且输入是Hash）
-		passwordMatched = true
+	// 优先尝试 bcrypt 验证 (如果 dbPass 是 bcrypt hash)
+	if len(dbPass) >= 60 && strings.HasPrefix(dbPass, "$2a$") {
+		// 如果输入是 SHA256，先尝试直接匹配 (不推荐，但为了兼容)
+		// 实际上 bcrypt 应该验证明文。
+		// 这里假设 inputPass 是明文。如果前端已经 hash 了一次，那它就是“明文”
+		if database.CheckPasswordHash(inputPass, dbPass) {
+			passwordMatched = true
+		}
 	} else {
-		// 不匹配，尝试转换后匹配
-		if isInputHash {
-			// 输入是 Hash，数据库可能是明文 -> 计算数据库明文的 Hash 对比
-			hash := sha256.Sum256([]byte(dbPass))
-			if hex.EncodeToString(hash[:]) == inputPass {
-				passwordMatched = true
-				// 自动升级数据库为 Hash
-				database.DB.Model(&user).Update("password", inputPass)
-			}
+		// 兼容旧逻辑：明文或 SHA256
+		isInputHash := len(inputPass) == 64 && isHex(inputPass)
+
+		if dbPass == inputPass {
+			passwordMatched = true
 		} else {
-			// 输入是明文，数据库可能是 Hash -> 计算输入明文的 Hash 对比
-			hash := sha256.Sum256([]byte(inputPass))
-			if hex.EncodeToString(hash[:]) == dbPass {
-				passwordMatched = true
+			if isInputHash {
+				hash := sha256.Sum256([]byte(dbPass))
+				if hex.EncodeToString(hash[:]) == inputPass {
+					passwordMatched = true
+				}
+			} else {
+				hash := sha256.Sum256([]byte(inputPass))
+				if hex.EncodeToString(hash[:]) == dbPass {
+					passwordMatched = true
+				}
+			}
+		}
+
+		// 登录成功后，自动升级为 Bcrypt
+		if passwordMatched {
+			newHash, err := database.HashPassword(inputPass)
+			if err == nil {
+				database.DB.Model(&user).Update("password", newHash)
 			}
 		}
 	}
@@ -190,12 +268,35 @@ func ChangePasswordHandler(c *gin.Context) {
 		return
 	}
 
-	if user.Password != req.OldPassword {
+	// 验证旧密码 (支持 bcrypt 兼容)
+	oldPassMatched := false
+	if len(user.Password) >= 60 && strings.HasPrefix(user.Password, "$2a$") {
+		if database.CheckPasswordHash(req.OldPassword, user.Password) {
+			oldPassMatched = true
+		}
+	} else if user.Password == req.OldPassword { // 简单明文对比(为了兼容)
+		oldPassMatched = true
+	} else {
+		// SHA256 兼容
+		hash := sha256.Sum256([]byte(req.OldPassword))
+		if hex.EncodeToString(hash[:]) == user.Password {
+			oldPassMatched = true
+		}
+	}
+
+	if !oldPassMatched {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Wrong old password"})
 		return
 	}
 
-	user.Password = req.NewPassword
+	// 使用 bcrypt 哈希新密码
+	newHash, err := database.HashPassword(req.NewPassword)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
+		return
+	}
+
+	user.Password = newHash
 	database.DB.Save(&user)
 	c.JSON(http.StatusOK, gin.H{"message": "Password updated"})
 }
@@ -244,7 +345,9 @@ func UpdateSMTPHandler(c *gin.Context) {
 	smtp.Host = req.Host
 	smtp.Port = req.Port
 	smtp.Username = req.Username
-	smtp.Password = req.Password
+	if req.Password != "" { // 仅当提供新密码时更新
+		smtp.Password = req.Password
+	}
 	smtp.SSL = req.SSL
 	smtp.IsDefault = req.IsDefault
 
@@ -258,6 +361,14 @@ func UpdateSMTPHandler(c *gin.Context) {
 func ListSMTPHandler(c *gin.Context) {
 	smtps := []database.SMTPConfig{}
 	database.DB.Order("is_default desc, id asc").Find(&smtps)
+	
+	// 脱敏密码
+	for i := range smtps {
+		if smtps[i].Password != "" {
+			smtps[i].Password = "******"
+		}
+	}
+	
 	c.JSON(http.StatusOK, smtps)
 }
 
@@ -557,6 +668,13 @@ func SendHandler(c *gin.Context) {
 				}
 			}
 
+			// [安全修复] 限制文件大小 (例如 10MB)
+			const MaxFileSize = 10 * 1024 * 1024
+			if err == nil && len(fileData) > MaxFileSize {
+				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Attachment %s exceeds limit (10MB)", att.Filename)})
+				return
+			}
+
 			// 2. 保存并记录
 			if err == nil && len(fileData) > 0 {
 				ext := filepath.Ext(att.Filename)
@@ -631,9 +749,25 @@ func GenerateDKIMHandler(c *gin.Context) {
 func GetConfigHandler(c *gin.Context) {
 	// 返回配置时隐藏敏感信息
 	cfg := config.AppConfig
-	// 这里可以根据需要决定是否隐藏 JWTSecret 或其他敏感信息
-	// cfg.JWTSecret = "***" 
-	c.JSON(http.StatusOK, cfg)
+	
+	// 脱敏处理
+	safeCfg := map[string]interface{}{
+		"domain":            cfg.Domain,
+		"dkim_selector":     cfg.DKIMSelector,
+		"dkim_private_key":  "****** (Hidden)", // 隐藏私钥
+		"host":              cfg.Host,
+		"port":              cfg.Port,
+		"base_url":          cfg.BaseURL,
+		"enable_ssl":        cfg.EnableSSL,
+		"cert_file":         cfg.CertFile,
+		"key_file":          cfg.KeyFile,
+		"enable_receiver":   cfg.EnableReceiver,
+		"receiver_port":     cfg.ReceiverPort,
+		"receiver_tls":      cfg.ReceiverTLS,
+		"jwt_secret":        "****** (Hidden)", // 隐藏 JWT Secret
+	}
+	
+	c.JSON(http.StatusOK, safeCfg)
 }
 
 // GetVersionHandler 获取系统版本
@@ -798,9 +932,14 @@ func BackupHandler(c *gin.Context) {
 
 // CaptchaHandler 生成验证码
 func CaptchaHandler(c *gin.Context) {
-	// 生成随机数字
-	mathrand.Seed(time.Now().UnixNano())
-	code := fmt.Sprintf("%04d", mathrand.Intn(10000))
+	// [安全修复] 使用 crypto/rand 生成随机数字
+	// 为了简化，我们生成 4 字节的随机数然后取模
+	b := make([]byte, 2)
+	rand.Read(b)
+	// 将字节转换为 uint16 (0-65535)，然后取模 10000
+	num := (int(b[0])<<8 | int(b[1])) % 10000
+	code := fmt.Sprintf("%04d", num)
+	
 	id := generateRandomKey() // 复用随机字符串生成
 
 	captchaMutex.Lock()
@@ -1168,23 +1307,26 @@ func TestPortHandler(c *gin.Context) {
 // getProcessInfo 获取占用端口的进程信息
 func getProcessInfo(port string) string {
 	if runtime.GOOS == "windows" {
-		// netstat -ano | findstr :PORT
-		cmd := exec.Command("cmd", "/C", fmt.Sprintf("netstat -ano | findstr :%s", port))
+		// [安全修复] 避免 cmd /C 拼接，防止命令注入
+		// 直接调用 netstat，不使用 findstr
+		cmd := exec.Command("netstat", "-ano")
 		out, err := cmd.Output()
 		if err != nil || len(out) == 0 {
 			return "Unknown (Check Task Manager)"
 		}
-		
+
 		lines := strings.Split(string(out), "\n")
+		targetPort := ":" + port
 		for _, line := range lines {
-			if strings.Contains(line, "LISTENING") {
+			// 简单的字符串包含检查
+			if strings.Contains(line, "LISTENING") && strings.Contains(line, targetPort) {
 				fields := strings.Fields(line)
 				if len(fields) > 0 {
 					pid := fields[len(fields)-1]
-					// tasklist | findstr PID
-					pCmd := exec.Command("cmd", "/C", fmt.Sprintf("tasklist /FI \"PID eq %s\" /FO CSV /NH", pid))
+					
+					// 使用 tasklist 但不拼接 PID
+					pCmd := exec.Command("tasklist", "/FI", "PID eq "+pid, "/FO", "CSV", "/NH")
 					pOut, _ := pCmd.Output()
-					// Output format: "process_name.exe","1234","Console","1","10,000 K"
 					parts := strings.Split(string(pOut), ",")
 					if len(parts) > 0 {
 						procName := strings.Trim(parts[0], "\"")
@@ -1211,6 +1353,14 @@ func getProcessInfo(port string) string {
 
 // KillProcessHandler 强制关闭占用端口的进程
 func KillProcessHandler(c *gin.Context) {
+	// [安全修复] 禁用远程 Kill 功能，防止滥用。
+	// 如需启用，请配置 EnableProcessControl (暂未实现配置项，目前默认禁用)
+	// 
+	// 如果确实需要在开发环境使用，请手动注释下行：
+	c.JSON(http.StatusForbidden, gin.H{"error": "Remote process control is disabled for security reasons."})
+	return
+
+	/* 
 	var req struct {
 		PID string `json:"pid"`
 	}
@@ -1243,11 +1393,12 @@ func KillProcessHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Process %s (PID: %s) terminated successfully", procName, req.PID)})
+	*/
 }
 
 func getProcessNameByPID(pid string) string {
 	if runtime.GOOS == "windows" {
-		cmd := exec.Command("cmd", "/C", fmt.Sprintf("tasklist /FI \"PID eq %s\" /FO CSV /NH", pid))
+		cmd := exec.Command("tasklist", "/FI", "PID eq "+pid, "/FO", "CSV", "/NH")
 		out, err := cmd.Output()
 		if err == nil {
 			parts := strings.Split(string(out), ",")

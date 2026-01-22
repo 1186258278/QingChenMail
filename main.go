@@ -34,14 +34,22 @@ func main() {
 
 	// 处理重置密码指令
 	if *resetPwd {
+		// [安全修复] 使用 Bcrypt 哈希存储密码
+		// 为了简化运维，重置操作仍然将密码设为 123456，但存储为 Hash
+		// 建议管理员在重置后立即登录并修改密码
+		hashedPassword, err := database.HashPassword("123456")
+		if err != nil {
+			log.Fatal("Failed to hash password:", err)
+		}
+
 		var user database.User
 		if err := database.DB.Where("username = ?", "admin").First(&user).Error; err == nil {
-			user.Password = "123456"
+			user.Password = hashedPassword
 			database.DB.Save(&user)
 			fmt.Println("[SUCCESS] Admin password has been reset to: 123456")
 		} else {
 			// 如果用户不存在，创建它
-			user = database.User{Username: "admin", Password: "123456"}
+			user = database.User{Username: "admin", Password: hashedPassword}
 			database.DB.Create(&user)
 			fmt.Println("[SUCCESS] Admin user created with password: 123456")
 		}
@@ -86,6 +94,7 @@ func main() {
 			authorized.POST("/config/dkim", api.GenerateDKIMHandler)
 			authorized.GET("/config", api.GetConfigHandler)
 			authorized.GET("/config/version", api.GetVersionHandler) // 新增
+			authorized.GET("/config/check-update", api.CheckUpdateHandler) // 新增：版本检查代理
 			authorized.POST("/config", api.UpdateConfigHandler)
 			authorized.POST("/config/test-port", api.TestPortHandler)
 			authorized.POST("/config/kill-process", api.KillProcessHandler) // 新增

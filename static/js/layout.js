@@ -142,8 +142,12 @@ async function checkVersion() {
         if (el) el.innerText = currentVer;
 
         // 2. 检查 GitHub 最新版本
-        // 使用简单的 fetch，注意 GitHub API 限制 (60次/小时，但在客户端发起是针对每个IP的，通常够用)
-        const ghRes = await fetch('https://api.github.com/repos/1186258278/QingChenMail/releases/latest');
+        // 使用后端代理以避免 GitHub API 速率限制 (Rate Limiting) 并利用缓存
+        // 需要传递 Token 才能通过后端鉴权
+        const ghRes = await fetch('/api/v1/config/check-update', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        
         if (ghRes.ok) {
             const ghData = await ghRes.json();
             const latestVer = ghData.tag_name; // e.g. "v1.0.4"

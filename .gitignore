@@ -22,6 +22,11 @@ logs/
 data/
 uploads/
 static/wallpapers/*.jpg
+docsaudit
+docs/audit
+
+# Mcp
+api_doc_mcp.log
 
 # Internal Docs
 docs/RELEASE_WORKFLOW_zh-CN.md

@@ -81,10 +81,19 @@ func processQueue() {
 	}
 
 	for _, task := range tasks {
-		// 立即标记为处理中，防止其他 Worker (如果有) 重复获取
-		// 实际上单实例下这里是顺序的，但在循环中更新状态是个好习惯
-		database.DB.Model(&task).Update("status", "processing")
+		// [优化] 使用原子更新防止竞争条件
+		// 只有当 status 仍为 pending/failed 时才更新为 processing
+		// 这可以防止多个 worker (如果部署了多个实例) 处理同一任务
+		result := database.DB.Model(&database.EmailQueue{}).
+			Where("id = ? AND (status = 'pending' OR status = 'failed')", task.ID).
+			Update("status", "processing")
 		
+		if result.RowsAffected == 0 {
+			continue // 已经被其他 worker 抢占
+		}
+		
+		// 重新赋值 task 以确保 goroutine 使用正确的数据 (尽管这里已经是拷贝的 task)
+		t := task
 		go func(t database.EmailQueue) {
 			if err := executeTask(t); err != nil {
 				// 失败处理
@@ -108,7 +117,7 @@ func processQueue() {
 					"error_msg": "",
 				})
 			}
-		}(task)
+		}(t)
 	}
 }
 

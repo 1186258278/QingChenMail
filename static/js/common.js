@@ -5,8 +5,10 @@ const API_BASE = '/api/v1';
 const Auth = {
     getToken: () => localStorage.getItem('token'),
     setToken: (token) => {
+        // 生产环境中，最好由后端 Set-Cookie 并指定 HttpOnly
+        // 这里作为后备或本地调试
         localStorage.setItem('token', token);
-        document.cookie = `token=${token}; path=/; max-age=86400`;
+        document.cookie = `token=${token}; path=/; max-age=86400; SameSite=Strict`;
     },
     logout: () => {
         localStorage.removeItem('token');
@@ -98,7 +100,12 @@ function showToast(msg, type = 'success') {
     const div = document.createElement('div');
     const color = type === 'success' ? 'bg-green-600' : 'bg-red-600';
     div.className = `fixed bottom-5 right-5 ${color} text-white px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300 translate-y-10 opacity-0 z-50 flex items-center`;
-    div.innerHTML = `<span>${msg}</span>`;
+    
+    // [安全修复] 防止 XSS: 使用 textContent 而不是 innerHTML
+    const span = document.createElement('span');
+    span.textContent = msg;
+    div.appendChild(span);
+    
     document.body.appendChild(div);
     
     requestAnimationFrame(() => {
@@ -117,10 +124,10 @@ const Utils = {
     escapeHtml: (unsafe) => {
         if (!unsafe) return '';
         return unsafe
-             .replace(/&/g, '&amp;')
-             .replace(/</g, '&lt;')
-             .replace(/>/g, '&gt;')
-             .replace(/"/g, '&quot;')
+             .replace(/&/g, '&')
+             .replace(/</g, '<')
+             .replace(/>/g, '>')
+             .replace(/"/g, '"')
              .replace(/'/g, '&#039;');
     }
 };
