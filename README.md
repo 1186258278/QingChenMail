@@ -1,4 +1,4 @@
-# QingChen Mail (GoEmail Pro)
+# QingChen Mail
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Go Version](https://img.shields.io/badge/go-1.21+-00ADD8.svg)](https://golang.org)
@@ -8,6 +8,8 @@
 > Enterprise-grade self-hosted email marketing and delivery solution.
 
 [English](README.md) | [中文文档](docs/README_zh-CN.md) | [部署指南 (中文)](docs/INSTALL_zh-CN.md)
+
+![Overview](docs/image/en/14.png)
 
 ## Overview
 
@@ -31,6 +33,32 @@ It supports dual delivery modes (Direct Send & SMTP Relay), automatic DKIM/SPF c
 *   **Zero-Maintenance**:
     *   Single binary deployment.
     *   Auto-calibration of database schema on startup.
+
+## Screenshots
+
+| Dashboard | Marketing |
+| :---: | :---: |
+| ![Dashboard](docs/image/en/02.png) | ![Marketing](docs/image/en/06.png) |
+
+| Contacts | Templates |
+| :---: | :---: |
+| ![Contacts](docs/image/en/05.png) | ![Templates](docs/image/en/10.png) |
+
+| SMTP Relays | Domains |
+| :---: | :---: |
+| ![SMTP](docs/image/en/04.png) | ![Domains](docs/image/en/08.png) |
+
+| Inbox | API Keys |
+| :---: | :---: |
+| ![Inbox](docs/image/en/07.png) | ![Keys](docs/image/en/09.png) |
+
+| Logs | Login |
+| :---: | :---: |
+| ![Logs](docs/image/en/11.png) | ![Login](docs/image/en/01.png) |
+
+| Files | Settings |
+| :---: | :---: |
+| ![Files](docs/image/en/12.png) | ![Settings](docs/image/en/15.png) |
 
 ## Quick Start
 

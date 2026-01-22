@@ -6,6 +6,10 @@
     <link href="/dashboard/css/tailwind.min.css?v=8.0" rel="stylesheet">
     <script src="/dashboard/js/common.js?v=8.0"></script>
     <script src="/dashboard/js/layout.js?v=8.0"></script>
+    <style>
+        body { opacity: 0; transition: opacity 0.1s ease-in-out; }
+        body.loaded { opacity: 1; }
+    </style>
 </head>
 <body class="hidden" data-i18n-module="templates">
     <div class="mb-8 flex justify-between items-center">
@@ -144,67 +148,62 @@
         // 统一响应式邮件骨架
         const baseStyle = `<style>body{margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background-color:#f4f7f6}.wrapper{width:100%;table-layout:fixed;background-color:#f4f7f6;padding-bottom:40px}.main{background-color:#ffffff;margin:0 auto;max-width:600px;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.05)}.header{text-align:center;padding:30px 0}.content{padding:40px}.btn{display:inline-block;padding:12px 24px;background-color:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:bold;margin-top:20px;transition:background-color 0.2s}.btn:hover{background-color:#1d4ed8}.footer{text-align:center;padding:20px;color:#9ca3af;font-size:12px;line-height:1.5}</style>`;
         
-        function wrap(title, content) {
-            return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">${baseStyle}</head><body><div class="wrapper"><div class="header"><h1 style="color:#1f2937;margin:0;font-size:24px;font-weight:700">{app_name}</h1></div><div class="main"><div class="content"><h2 style="color:#111827;margin-top:0;font-size:20px;margin-bottom:20px">${title}</h2>${content}</div></div><div class="footer"><p>&copy; 2026 {app_name}. All rights reserved.</p><p>武汉晴辰天下网络科技有限公司 | <a href="#" style="color:#6b7280;text-decoration:underline">取消订阅</a></p></div></div></body></html>`;
+        function wrap(title, content, lang='zh-CN') {
+            const footerText = lang === 'en' ? 
+                'QingChen Cloud | <a href="#" style="color:#6b7280;text-decoration:underline">Unsubscribe</a>' : 
+                '武汉晴辰天下网络科技有限公司 | <a href="#" style="color:#6b7280;text-decoration:underline">取消订阅</a>';
+            return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">${baseStyle}</head><body><div class="wrapper"><div class="header"><h1 style="color:#1f2937;margin:0;font-size:24px;font-weight:700">{app_name}</h1></div><div class="main"><div class="content"><h2 style="color:#111827;margin-top:0;font-size:20px;margin-bottom:20px">${title}</h2>${content}</div></div><div class="footer"><p>&copy; 2026 {app_name}. All rights reserved.</p><p>${footerText}</p></div></div></body></html>`;
         }
 
-        // 10个精美预设模板
-        const presets = {
-            welcome: { 
-                name: "新用户欢迎信", 
-                subject: "欢迎加入 {app_name}！", 
-                body: wrap("欢迎加入我们！🎉", `<p style="color:#4b5563;line-height:1.6">亲爱的 {username}：</p><p style="color:#4b5563;line-height:1.6">感谢您注册我们的服务。我们非常高兴能有您的加入！在这里，您可以体验到最专业的服务。</p><p style="color:#4b5563;line-height:1.6">点击下方按钮开始您的探索之旅：</p><center><a href="{link}" class="btn">开始使用</a></center>`)
+        // 双语预设模板
+        const presetsData = {
+            welcome: {
+                zh: { name: "新用户欢迎信", subject: "欢迎加入 {app_name}！", body: wrap("欢迎加入我们！🎉", `<p style="color:#4b5563;line-height:1.6">亲爱的 {username}：</p><p style="color:#4b5563;line-height:1.6">感谢您注册我们的服务。我们非常高兴能有您的加入！在这里，您可以体验到最专业的服务。</p><p style="color:#4b5563;line-height:1.6">点击下方按钮开始您的探索之旅：</p><center><a href="{link}" class="btn">开始使用</a></center>`, 'zh-CN') },
+                en: { name: "Welcome to {app_name}", subject: "Welcome aboard! 🚀", body: wrap("Welcome to {app_name}! 🎉", `<p style="color:#4b5563;line-height:1.6">Dear {username},</p><p style="color:#4b5563;line-height:1.6">Thank you for signing up. We're thrilled to have you! You can now experience our professional services.</p><p style="color:#4b5563;line-height:1.6">Click the button below to get started:</p><center><a href="{link}" class="btn">Get Started</a></center>`, 'en') }
             },
-            verify: { 
-                name: "验证码邮件", 
-                subject: "【安全提醒】您的验证码是 {code}", 
-                body: wrap("身份验证", `<p style="color:#4b5563">您正在进行身份验证操作，请使用以下验证码完成流程：</p><div style="background:#eff6ff;padding:20px;text-align:center;font-size:32px;font-weight:bold;color:#2563eb;letter-spacing:8px;margin:24px 0;border-radius:8px;border:1px dashed #bfdbfe">{code}</div><p style="color:#6b7280;font-size:13px;text-align:center">验证码 10 分钟内有效。请勿将此验证码泄露给他人。</p>`)
+            verify: {
+                zh: { name: "验证码邮件", subject: "【安全提醒】您的验证码是 {code}", body: wrap("身份验证", `<p style="color:#4b5563">您正在进行身份验证操作，请使用以下验证码完成流程：</p><div style="background:#eff6ff;padding:20px;text-align:center;font-size:32px;font-weight:bold;color:#2563eb;letter-spacing:8px;margin:24px 0;border-radius:8px;border:1px dashed #bfdbfe">{code}</div><p style="color:#6b7280;font-size:13px;text-align:center">验证码 10 分钟内有效。请勿将此验证码泄露给他人。</p>`, 'zh-CN') },
+                en: { name: "Verification Code", subject: "Your verification code: {code}", body: wrap("Verify Your Identity", `<p style="color:#4b5563">You are verifying your identity. Please use the following code:</p><div style="background:#eff6ff;padding:20px;text-align:center;font-size:32px;font-weight:bold;color:#2563eb;letter-spacing:8px;margin:24px 0;border-radius:8px;border:1px dashed #bfdbfe">{code}</div><p style="color:#6b7280;font-size:13px;text-align:center">Code expires in 10 minutes. Do not share this code.</p>`, 'en') }
             },
-            reset_pwd: { 
-                name: "重置密码", 
-                subject: "重置您的账户密码", 
-                body: wrap("重置密码请求", `<p style="color:#4b5563">我们收到了重置您账户密码的请求。</p><p style="color:#4b5563">如果是您本人的操作，请点击下方按钮设置新密码：</p><center><a href="{reset_link}" class="btn" style="background-color:#dc2626">重置密码</a></center><p style="margin-top:24px;color:#9ca3af;font-size:13px">如果您没有请求重置密码，请忽略此邮件，您的账户是安全的。</p>`)
+            reset_pwd: {
+                zh: { name: "重置密码", subject: "重置您的账户密码", body: wrap("重置密码请求", `<p style="color:#4b5563">我们收到了重置您账户密码的请求。</p><p style="color:#4b5563">如果是您本人的操作，请点击下方按钮设置新密码：</p><center><a href="{reset_link}" class="btn" style="background-color:#dc2626">重置密码</a></center><p style="margin-top:24px;color:#9ca3af;font-size:13px">如果您没有请求重置密码，请忽略此邮件，您的账户是安全的。</p>`, 'zh-CN') },
+                en: { name: "Reset Password", subject: "Reset your password", body: wrap("Password Reset Request", `<p style="color:#4b5563">We received a request to reset your password.</p><p style="color:#4b5563">If this was you, click the button below to set a new password:</p><center><a href="{reset_link}" class="btn" style="background-color:#dc2626">Reset Password</a></center><p style="margin-top:24px;color:#9ca3af;font-size:13px">If you didn't ask to reset your password, you can ignore this email.</p>`, 'en') }
             },
-            order: { 
-                name: "订单确认", 
-                subject: "您的订单 #{order_id} 已确认", 
-                body: wrap("订单确认 ✅", `<p style="color:#4b5563">感谢您的购买！您的订单已处理。</p><table style="width:100%;border-collapse:collapse;margin:20px 0;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden"><tr><td style="padding:12px;border-bottom:1px solid #e5e7eb;background:#f9fafb;color:#6b7280">订单号</td><td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:bold;color:#111827">#{order_id}</td></tr><tr><td style="padding:12px;background:#f9fafb;color:#6b7280">支付金额</td><td style="padding:12px;text-align:right;font-weight:bold;color:#059669">￥{amount}</td></tr></table><p style="color:#4b5563">我们将在发货后再次通知您。</p>`)
+            order: {
+                zh: { name: "订单确认", subject: "您的订单 #{order_id} 已确认", body: wrap("订单确认 ✅", `<p style="color:#4b5563">感谢您的购买！您的订单已处理。</p><table style="width:100%;border-collapse:collapse;margin:20px 0;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden"><tr><td style="padding:12px;border-bottom:1px solid #e5e7eb;background:#f9fafb;color:#6b7280">订单号</td><td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:bold;color:#111827">#{order_id}</td></tr><tr><td style="padding:12px;background:#f9fafb;color:#6b7280">支付金额</td><td style="padding:12px;text-align:right;font-weight:bold;color:#059669">￥{amount}</td></tr></table><p style="color:#4b5563">我们将在发货后再次通知您。</p>`, 'zh-CN') },
+                en: { name: "Order Confirmed", subject: "Order #{order_id} Confirmed", body: wrap("Order Confirmed ✅", `<p style="color:#4b5563">Thank you for your purchase! Your order has been processed.</p><table style="width:100%;border-collapse:collapse;margin:20px 0;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden"><tr><td style="padding:12px;border-bottom:1px solid #e5e7eb;background:#f9fafb;color:#6b7280">Order ID</td><td style="padding:12px;border-bottom:1px solid #e5e7eb;text-align:right;font-weight:bold;color:#111827">#{order_id}</td></tr><tr><td style="padding:12px;background:#f9fafb;color:#6b7280">Amount</td><td style="padding:12px;text-align:right;font-weight:bold;color:#059669">{amount}</td></tr></table><p style="color:#4b5563">We will notify you once shipped.</p>`, 'en') }
             },
-            shipping: { 
-                name: "发货通知", 
-                subject: "📦 您的包裹已发货！", 
-                body: wrap("包裹已发货", `<p style="color:#4b5563">您好 {username}，</p><p style="color:#4b5563">好消息！您的订单 #{order_id} 已经发货。</p><div style="background:#f3f4f6;padding:16px;border-radius:8px;margin:20px 0"><p style="margin:0;color:#6b7280;font-size:12px">物流单号</p><p style="margin:4px 0 0 0;font-weight:bold;color:#111827;font-size:18px">{tracking_no}</p></div><center><a href="{tracking_link}" class="btn">追踪物流</a></center>`)
+            shipping: {
+                zh: { name: "发货通知", subject: "📦 您的包裹已发货！", body: wrap("包裹已发货", `<p style="color:#4b5563">您好 {username}，</p><p style="color:#4b5563">好消息！您的订单 #{order_id} 已经发货。</p><div style="background:#f3f4f6;padding:16px;border-radius:8px;margin:20px 0"><p style="margin:0;color:#6b7280;font-size:12px">物流单号</p><p style="margin:4px 0 0 0;font-weight:bold;color:#111827;font-size:18px">{tracking_no}</p></div><center><a href="{tracking_link}" class="btn">追踪物流</a></center>`, 'zh-CN') },
+                en: { name: "Order Shipped", subject: "📦 Your order has shipped!", body: wrap("Order Shipped", `<p style="color:#4b5563">Hi {username},</p><p style="color:#4b5563">Great news! Your order #{order_id} is on its way.</p><div style="background:#f3f4f6;padding:16px;border-radius:8px;margin:20px 0"><p style="margin:0;color:#6b7280;font-size:12px">Tracking Number</p><p style="margin:4px 0 0 0;font-weight:bold;color:#111827;font-size:18px">{tracking_no}</p></div><center><a href="{tracking_link}" class="btn">Track Order</a></center>`, 'en') }
             },
-            activity: { 
-                name: "活动推广", 
-                subject: "🔥 限时特惠：全场 8 折起！", 
-                body: wrap("年中大促来袭", `<div style="background:linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);color:white;padding:30px;border-radius:8px;text-align:center;margin-bottom:20px"><h2 style="margin:0;font-size:28px">全场 8 折</h2><p style="margin:10px 0 0 0;opacity:0.9">限时 3 天 · 欲购从速</p></div><p style="color:#4b5563">亲爱的用户，为了回馈您的支持，我们推出了年度最强优惠！</p><center><a href="{promo_link}" class="btn" style="background-color:#dc2626">立即抢购</a></center>`)
+            activity: {
+                zh: { name: "活动推广", subject: "🔥 限时特惠：全场 8 折起！", body: wrap("年中大促来袭", `<div style="background:linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);color:white;padding:30px;border-radius:8px;text-align:center;margin-bottom:20px"><h2 style="margin:0;font-size:28px">全场 8 折</h2><p style="margin:10px 0 0 0;opacity:0.9">限时 3 天 · 欲购从速</p></div><p style="color:#4b5563">亲爱的用户，为了回馈您的支持，我们推出了年度最强优惠！</p><center><a href="{promo_link}" class="btn" style="background-color:#dc2626">立即抢购</a></center>`, 'zh-CN') },
+                en: { name: "Special Offer", subject: "🔥 Limited Time: 20% OFF!", body: wrap("Summer Sale", `<div style="background:linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);color:white;padding:30px;border-radius:8px;text-align:center;margin-bottom:20px"><h2 style="margin:0;font-size:28px">20% OFF ALL</h2><p style="margin:10px 0 0 0;opacity:0.9">3 Days Only</p></div><p style="color:#4b5563">Dear Customer, we're launching our biggest sale of the year!</p><center><a href="{promo_link}" class="btn" style="background-color:#dc2626">Shop Now</a></center>`, 'en') }
             },
-            holiday: { 
-                name: "节日问候", 
-                subject: "🎄 {app_name} 祝您节日快乐", 
-                body: wrap("节日快乐", `<div style="text-align:center"><img src="https://img.icons8.com/color/96/000000/christmas-star.png" alt="icon" style="width:64px;height:64px;margin-bottom:20px"></div><p style="color:#4b5563;text-align:center;font-size:16px">在这个温馨的时刻，我们想向您致以最诚挚的问候。<br>感谢您一年来的陪伴，愿您的生活充满爱与喜悦。</p><br><p style="text-align:center;color:#6b7280">— {app_name} 团队 敬上</p>`)
+            holiday: {
+                zh: { name: "节日问候", subject: "🎄 {app_name} 祝您节日快乐", body: wrap("节日快乐", `<div style="text-align:center"><img src="https://img.icons8.com/color/96/000000/christmas-star.png" alt="icon" style="width:64px;height:64px;margin-bottom:20px"></div><p style="color:#4b5563;text-align:center;font-size:16px">在这个温馨的时刻，我们想向您致以最诚挚的问候。<br>感谢您一年来的陪伴，愿您的生活充满爱与喜悦。</p><br><p style="text-align:center;color:#6b7280">— {app_name} 团队 敬上</p>`, 'zh-CN') },
+                en: { name: "Happy Holidays", subject: "🎄 Happy Holidays from {app_name}", body: wrap("Happy Holidays", `<div style="text-align:center"><img src="https://img.icons8.com/color/96/000000/christmas-star.png" alt="icon" style="width:64px;height:64px;margin-bottom:20px"></div><p style="color:#4b5563;text-align:center;font-size:16px">Sending you our warmest wishes for a happy holiday season.<br>Thank you for your support this year.</p><br><p style="text-align:center;color:#6b7280">— The {app_name} Team</p>`, 'en') }
             },
-            recall: { 
-                name: "用户召回", 
-                subject: "👋 {username}，好久不见", 
-                body: wrap("好久不见", `<p style="color:#4b5563">亲爱的 {username}：</p><p style="color:#4b5563">我们发现您已经有一段时间没有登录了。最近我们更新了许多新功能，相信您会喜欢。</p><div style="background:#fff7ed;border:1px solid #ffedd5;padding:16px;border-radius:8px;margin:20px 0;color:#c2410c"><strong>🎁 专属回归礼包已放入您的账户</strong></div><center><a href="{link}" class="btn">回来看看</a></center>`)
+            recall: {
+                zh: { name: "用户召回", subject: "👋 {username}，好久不见", body: wrap("好久不见", `<p style="color:#4b5563">亲爱的 {username}：</p><p style="color:#4b5563">我们发现您已经有一段时间没有登录了。最近我们更新了许多新功能，相信您会喜欢。</p><div style="background:#fff7ed;border:1px solid #ffedd5;padding:16px;border-radius:8px;margin:20px 0;color:#c2410c"><strong>🎁 专属回归礼包已放入您的账户</strong></div><center><a href="{link}" class="btn">回来看看</a></center>`, 'zh-CN') },
+                en: { name: "We Miss You", subject: "👋 {username}, we miss you!", body: wrap("We Miss You", `<p style="color:#4b5563">Dear {username},</p><p style="color:#4b5563">We noticed you haven't visited in a while. We've added many new features you might like.</p><div style="background:#fff7ed;border:1px solid #ffedd5;padding:16px;border-radius:8px;margin:20px 0;color:#c2410c"><strong>🎁 A welcome back gift is waiting for you</strong></div><center><a href="{link}" class="btn">Come Back</a></center>`, 'en') }
             },
-            feedback: { 
-                name: "问卷调查", 
-                subject: "📝 我们想听听您的声音", 
-                body: wrap("满意度调查", `<p style="color:#4b5563">您好，</p><p style="color:#4b5563">为了给您提供更好的服务，我们诚邀您参与本次满意度调查。您的意见对我们至关重要。</p><p style="color:#6b7280;font-size:13px">预计用时：1 分钟</p><center><a href="{survey_link}" class="btn" style="background-color:#059669">参与调查</a></center>`)
+            feedback: {
+                zh: { name: "问卷调查", subject: "📝 我们想听听您的声音", body: wrap("满意度调查", `<p style="color:#4b5563">您好，</p><p style="color:#4b5563">为了给您提供更好的服务，我们诚邀您参与本次满意度调查。您的意见对我们至关重要。</p><p style="color:#6b7280;font-size:13px">预计用时：1 分钟</p><center><a href="{survey_link}" class="btn" style="background-color:#059669">参与调查</a></center>`, 'zh-CN') },
+                en: { name: "Feedback", subject: "📝 We value your feedback", body: wrap("Customer Survey", `<p style="color:#4b5563">Hello,</p><p style="color:#4b5563">We'd love to hear your thoughts to serve you better. Please take a moment to fill out our survey.</p><p style="color:#6b7280;font-size:13px">Estimated time: 1 min</p><center><a href="{survey_link}" class="btn" style="background-color:#059669">Take Survey</a></center>`, 'en') }
             },
-            system: { 
-                name: "系统通知", 
-                subject: "⚠️ 系统维护通知", 
-                body: wrap("系统维护公告", `<div style="background:#fffbeb;border-left:4px solid #f59e0b;padding:16px;margin-bottom:20px"><p style="margin:0;color:#92400e;font-weight:bold">维护时间：{time}</p></div><p style="color:#4b5563">尊敬的用户：</p><p style="color:#4b5563">为了提供更稳定的服务，我们将进行系统升级维护。</p><p style="color:#4b5563">维护期间服务可能无法访问，请您提前做好安排。给您带来的不便敬请谅解。</p>`)
+            system: {
+                zh: { name: "系统通知", subject: "⚠️ 系统维护通知", body: wrap("系统维护公告", `<div style="background:#fffbeb;border-left:4px solid #f59e0b;padding:16px;margin-bottom:20px"><p style="margin:0;color:#92400e;font-weight:bold">维护时间：{time}</p></div><p style="color:#4b5563">尊敬的用户：</p><p style="color:#4b5563">为了提供更稳定的服务，我们将进行系统升级维护。</p><p style="color:#4b5563">维护期间服务可能无法访问，请您提前做好安排。给您带来的不便敬请谅解。</p>`, 'zh-CN') },
+                en: { name: "System Maintenance", subject: "⚠️ System Maintenance Notice", body: wrap("Maintenance Notice", `<div style="background:#fffbeb;border-left:4px solid #f59e0b;padding:16px;margin-bottom:20px"><p style="margin:0;color:#92400e;font-weight:bold">Time: {time}</p></div><p style="color:#4b5563">Dear User,</p><p style="color:#4b5563">We will be performing system maintenance to ensure service stability.</p><p style="color:#4b5563">The service might be unavailable during this time. We apologize for any inconvenience.</p>`, 'en') }
             }
         };
 
         function applyPreset(key) {
-            if (presets[key]) {
-                const t = presets[key];
+            if (presetsData[key]) {
+                const lang = localStorage.getItem('locale') === 'en' ? 'en' : 'zh';
+                const t = presetsData[key][lang] || presetsData[key]['zh']; // Fallback to ZH
+                
                 document.getElementById('tpl-name').value = t.name;
                 document.getElementById('tpl-subject').value = t.subject;
                 document.getElementById('tpl-body').value = t.body;
@@ -365,6 +364,54 @@
                     loadTemplates();
                     showToast(I18n.t('common.deleted'));
                 } catch (e) {}
+            }
+        }
+
+        // Fix: Add missing functions
+        function openPreview(id) {
+            const t = templateList.find(item => item.id === id);
+            if (!t) return;
+            
+            // Simple variable replacement for preview
+            const simulatedHtml = t.body
+                .replace(/{username}/g, 'John Doe')
+                .replace(/{app_name}/g, '晴辰云邮')
+                .replace(/{code}/g, '123456')
+                .replace(/{link}/g, '#');
+
+            const iframe = document.getElementById('readonly-preview-frame');
+            iframe.srcdoc = simulatedHtml;
+            document.getElementById('preview-modal').classList.remove('hidden');
+        }
+
+        function closePreview() {
+            document.getElementById('preview-modal').classList.add('hidden');
+        }
+
+        async function testTemplate(id) {
+            const t = templateList.find(item => item.id === id);
+            if (!t) return;
+
+            const email = prompt(I18n.t('templates.prompt.test_email') || "请输入测试接收邮箱:", "");
+            if (email) {
+                const testBody = t.body
+                    .replace(/{username}/g, 'Test User')
+                    .replace(/{app_name}/g, '晴辰云邮')
+                    .replace(/{code}/g, '888888');
+
+                try {
+                    await request('/send', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            to: email,
+                            subject: "[测试] " + t.subject,
+                            body: testBody
+                        })
+                    });
+                    showToast(I18n.t('templates.toast.test_sent') || "测试邮件已发送");
+                } catch(e) {
+                    // request handles error
+                }
             }
         }
 

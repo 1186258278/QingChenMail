@@ -151,8 +151,8 @@ func runSeeding() {
 		log.Println("[DB] Seeding example templates...")
 		DB.Create(&Template{
 			Name:    "欢迎邮件 (示例)",
-			Subject: "欢迎使用 GoEmail Pro",
-			Body:    "<h1>你好 {username},</h1><p>感谢选择 GoEmail Pro 自建邮局系统。</p>",
+			Subject: "欢迎使用 QingChen Mail",
+			Body:    "<h1>你好 {username},</h1><p>感谢选择 QingChen Mail 自建邮局系统。</p>",
 		})
 	}
 

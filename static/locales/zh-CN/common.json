@@ -1,7 +1,8 @@
 {
     "common.title": "晴辰云邮",
     "common.subtitle": "QingChen Cloud",
-    "common.copyright": "&copy; 2026 武汉晴辰天下网络科技有限公司",
+    "common.copyright": "&copy; 2026",
+    "common.company_name": "晴辰天下",
     "common.website": "qingchencloud.com",
     "common.logout": "退出登录",
     "common.confirm": "确认",

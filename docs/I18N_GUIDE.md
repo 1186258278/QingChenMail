@@ -1,4 +1,4 @@
-# GoEmail Pro 多语言开发规范
+# QingChen Mail 多语言开发规范
 
 本项目采用 **前后端分离** 的国际化 (i18n) 策略。
 前端基于原生 JS 实现轻量级加载，后端遵循 "English First" 原则。

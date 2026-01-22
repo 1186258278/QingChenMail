@@ -6,6 +6,10 @@
     <link href="/dashboard/css/tailwind.min.css?v=8.0" rel="stylesheet">
     <script src="/dashboard/js/common.js?v=8.0"></script>
     <script src="/dashboard/js/layout.js?v=8.0"></script>
+    <style>
+        body { opacity: 0; transition: opacity 0.1s ease-in-out; }
+        body.loaded { opacity: 1; }
+    </style>
 </head>
 <body class="hidden" data-i18n-module="contacts">
     <div class="mb-8 flex justify-between items-center">
@@ -34,7 +38,7 @@
             <!-- 工具栏 -->
             <div class="p-4 border-b border-gray-100 flex justify-between items-center">
                 <div class="flex items-center space-x-3">
-                    <h3 id="current-group-name" class="font-bold text-xl text-gray-800">所有联系人</h3>
+                    <h3 id="current-group-name" class="font-bold text-xl text-gray-800" data-i18n="contacts.groups.empty_select">...</h3>
                     <span id="current-group-count" class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs">0</span>
                 </div>
                 <div class="flex items-center space-x-3">
@@ -410,7 +414,12 @@
             }
         }
 
-        loadGroups();
+        // Wait for I18n to be ready before loading data to ensure translations work
+        if (typeof I18n !== 'undefined' && I18n.isReady) {
+            loadGroups();
+        } else {
+            document.addEventListener('i18n-ready', loadGroups);
+        }
     </script>
 </body>
 </html>

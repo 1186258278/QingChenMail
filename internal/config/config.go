@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+const Version = "v1.0.2"
+
 type Config struct {
 	Domain         string `json:"domain"`
 	DKIMSelector   string `json:"dkim_selector"`

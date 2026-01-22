@@ -636,6 +636,13 @@ func GetConfigHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, cfg)
 }
 
+// GetVersionHandler 获取系统版本
+func GetVersionHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"version": config.Version,
+	})
+}
+
 // UpdateConfigHandler 更新配置
 func UpdateConfigHandler(c *gin.Context) {
 	var newConfig config.Config

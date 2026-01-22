@@ -6,6 +6,10 @@
     <link href="/dashboard/css/tailwind.min.css?v=8.0" rel="stylesheet">
     <script src="/dashboard/js/common.js?v=8.0"></script>
     <script src="/dashboard/js/layout.js?v=8.0"></script>
+    <style>
+        body { opacity: 0; transition: opacity 0.1s ease-in-out; }
+        body.loaded { opacity: 1; }
+    </style>
 </head>
 <body class="hidden" data-i18n-module="campaigns">
     <div class="mb-8 flex justify-between items-center">
@@ -35,7 +39,7 @@
                     <!-- 基本信息 -->
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="campaigns.modal.name">任务名称</label>
-                        <input type="text" id="name" required placeholder="例如：2026新年促销" class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <input type="text" id="name" required data-i18n-attr="placeholder:campaigns.modal.name_ph" placeholder="例如：2026新年促销" class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
                     </div>
                     
                     <!-- 发件配置 -->

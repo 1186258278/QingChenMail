@@ -16,6 +16,7 @@
     "campaigns.action.start": "启动",
     "campaigns.modal.title": "创建营销任务",
     "campaigns.modal.name": "任务名称",
+    "campaigns.modal.name_ph": "例如：2026新年促销",
     "campaigns.modal.sender": "发件通道",
     "campaigns.modal.target": "收件人组",
     "campaigns.modal.subject": "邮件主题",

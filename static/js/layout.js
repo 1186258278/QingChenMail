@@ -50,21 +50,34 @@ document.addEventListener('DOMContentLoaded', () => {
             `}).join('')}
         </nav>
         
-        <div class="p-4 border-t border-gray-100 space-y-4">
-            <!-- 语言切换 -->
-            <div class="flex items-center justify-center space-x-2 bg-gray-50 p-2 rounded-xl">
-                <button onclick="I18n.changeLanguage('zh-CN')" class="text-xs px-2 py-1 rounded transition-colors ${!localStorage.getItem('locale') || localStorage.getItem('locale') === 'zh-CN' ? 'bg-white shadow text-blue-600 font-bold' : 'text-gray-500 hover:text-gray-700'}">中文</button>
-                <button onclick="I18n.changeLanguage('en')" class="text-xs px-2 py-1 rounded transition-colors ${localStorage.getItem('locale') === 'en' ? 'bg-white shadow text-blue-600 font-bold' : 'text-gray-500 hover:text-gray-700'}">EN</button>
-            </div>
-
-            <div class="px-4 text-xs text-gray-400 leading-relaxed">
-                <p data-i18n="common.copyright">&copy; 2026 武汉晴辰天下网络科技有限公司</p>
-                <a href="https://qingchencloud.com/" target="_blank" class="text-blue-500 hover:text-blue-600" data-i18n="common.website">qingchencloud.com</a>
-            </div>
-            <button onclick="Auth.logout()" class="flex items-center w-full px-4 py-3 text-sm font-medium text-gray-500 hover:bg-red-50 hover:text-red-600 rounded-2xl transition-colors">
-                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+        <div class="p-4 border-t border-gray-100 flex flex-col space-y-4">
+            <!-- 退出按钮 (左对齐，与上方菜单一致) -->
+            <button onclick="Auth.logout()" class="flex items-center w-full px-4 py-3 text-sm font-medium text-gray-500 hover:bg-red-50 hover:text-red-600 rounded-2xl transition-colors group">
+                <svg class="w-5 h-5 mr-3 text-gray-400 group-hover:text-red-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
                 <span data-i18n="common.logout">退出登录</span>
             </button>
+
+            <div class="px-4 space-y-3">
+                <!-- 语言 & 版本 -->
+                <div class="flex items-center justify-between">
+                    <div class="flex space-x-2 text-[10px] font-bold">
+                        <span onclick="I18n.changeLanguage('zh-CN')" class="cursor-pointer transition-colors ${!localStorage.getItem('locale') || localStorage.getItem('locale') === 'zh-CN' ? 'text-blue-600' : 'text-gray-300 hover:text-gray-500'}">CN</span>
+                        <span class="text-gray-200">/</span>
+                        <span onclick="I18n.changeLanguage('en')" class="cursor-pointer transition-colors ${localStorage.getItem('locale') === 'en' ? 'text-blue-600' : 'text-gray-300 hover:text-gray-500'}">EN</span>
+                    </div>
+                    <!-- 版本号 (右浮动) -->
+                    <div id="version-info" class="text-[10px] font-mono text-gray-300 hover:text-blue-500 transition-colors cursor-pointer" onclick="window.open('https://github.com/1186258278/QingChenMail/releases', '_blank')"></div>
+                </div>
+
+                <!-- 版权信息 (左对齐，单行优化) -->
+                <div class="text-[10px] text-gray-400 leading-tight space-y-1">
+                    <div class="flex items-center space-x-1 opacity-80">
+                        <span>&copy; 2026</span>
+                        <span data-i18n="common.company_name">晴辰天下</span>
+                    </div>
+                    <a href="https://qingchencloud.com/" target="_blank" class="block hover:text-blue-600 transition-colors text-gray-300" data-i18n="common.website">qingchencloud.com</a>
+                </div>
+            </div>
         </div>
     </aside>
     
@@ -77,16 +90,79 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('main-content').innerHTML = bodyContent;
     document.body.classList.remove('hidden');
     
-    // 全局样式注入
+    // 全局样式注入 (仅注入通用类，动画样式已移至 HTML Head 以避免闪烁)
     const style = document.createElement('style');
     style.innerHTML = `
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+        }
         .glass-card { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.5); }
     `;
     document.head.appendChild(style);
+
+    // 页面加载动画
+    requestAnimationFrame(() => document.body.classList.add('loaded'));
+
+    // 拦截链接点击实现平滑切换
+    document.addEventListener('click', (e) => {
+        const link = e.target.closest('a');
+        if (link && link.href && link.href.startsWith(window.location.origin) && !link.target && !link.hasAttribute('download') && !e.ctrlKey && !e.metaKey) {
+            e.preventDefault();
+            document.body.classList.remove('loaded');
+            setTimeout(() => {
+                window.location.href = link.href;
+            }, 300); // 与 transition 时间匹配
+        }
+    });
 
     // 如果 I18n 已经准备好，重新渲染一下侧边栏
     if (typeof I18n !== 'undefined' && I18n.isReady) {
         I18n.render();
     }
+
+    // 版本检测
+    checkVersion();
 });
+
+async function checkVersion() {
+    try {
+        // 1. 获取当前版本
+        const token = localStorage.getItem('token');
+        if (!token) return; // 未登录不检测
+
+        const res = await fetch('/api/v1/config/version', {
+            headers: { 'Authorization': 'Bearer ' + token }
+        });
+        if (!res.ok) return;
+        
+        const data = await res.json();
+        const currentVer = data.version; // e.g. "v1.0.3"
+        
+        const el = document.getElementById('version-info');
+        if (el) el.innerText = currentVer;
+
+        // 2. 检查 GitHub 最新版本
+        // 使用简单的 fetch，注意 GitHub API 限制 (60次/小时，但在客户端发起是针对每个IP的，通常够用)
+        const ghRes = await fetch('https://api.github.com/repos/1186258278/QingChenMail/releases/latest');
+        if (ghRes.ok) {
+            const ghData = await ghRes.json();
+            const latestVer = ghData.tag_name; // e.g. "v1.0.4"
+            
+            // 简单字符串比较，或者语义化版本比较
+            // 假设都是 vX.Y.Z 格式
+            if (latestVer && latestVer !== currentVer) {
+                if (el) {
+                    // 防止事件冒泡冲突，这里直接放链接
+                    el.innerHTML = `<span class="mr-1">${currentVer}</span><span class="text-red-500 font-bold animate-pulse">↑</span>`;
+                    el.setAttribute('title', `New version available: ${latestVer}`);
+                    el.onclick = (e) => {
+                        e.stopPropagation();
+                        window.open(ghData.html_url, '_blank');
+                    };
+                }
+            }
+        }
+    } catch (e) {
+        console.error('Version check failed:', e);
+    }
+}

@@ -1,32 +1,20 @@
 {
-    "title": "Contacts",
-    "subtitle": "Manage your customer lists and subscribers",
-    "groups": {
-        "title": "Groups",
-        "empty": "No groups",
-        "empty_select": "Select a group",
-        "modal_title": "Manage Group",
-        "name": "Group Name",
-        "desc": "Description",
-        "select_hint": "Please select a group first"
-    },
-    "table": {
-        "email": "Email",
-        "name": "Name",
-        "status": "Status"
-    },
-    "modal": {
-        "add_title": "Add Contact"
-    },
-    "import": {
-        "title": "Batch Import",
-        "hint": "Format: One per line, \"email,name\". E.g.: test@example.com,John Doe"
-    },
-    "action": {
-        "add": "Add Contact",
-        "import": "Import"
-    },
-    "alert": {
-        "delete_group": "Are you sure? The group must be empty to delete."
-    }
+    "contacts.title": "Contacts",
+    "contacts.subtitle": "Manage your customer lists and subscribers",
+    "contacts.groups.title": "Groups",
+    "contacts.groups.empty": "No groups",
+    "contacts.groups.empty_select": "Select a group",
+    "contacts.groups.modal_title": "Manage Group",
+    "contacts.groups.name": "Group Name",
+    "contacts.groups.desc": "Description",
+    "contacts.groups.select_hint": "Please select a group first",
+    "contacts.table.email": "Email",
+    "contacts.table.name": "Name",
+    "contacts.table.status": "Status",
+    "contacts.modal.add_title": "Add Contact",
+    "contacts.import.title": "Batch Import",
+    "contacts.import.hint": "Format: One per line, \"email,name\". E.g.: test@example.com,John Doe",
+    "contacts.action.add": "Add Contact",
+    "contacts.action.import": "Import",
+    "contacts.alert.delete_group": "Are you sure? The group must be empty to delete."
 }

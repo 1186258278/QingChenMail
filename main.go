@@ -85,6 +85,7 @@ func main() {
 			authorized.GET("/logs", api.LogsHandler)
 			authorized.POST("/config/dkim", api.GenerateDKIMHandler)
 			authorized.GET("/config", api.GetConfigHandler)
+			authorized.GET("/config/version", api.GetVersionHandler) // 新增
 			authorized.POST("/config", api.UpdateConfigHandler)
 			authorized.POST("/config/test-port", api.TestPortHandler)
 			authorized.POST("/config/kill-process", api.KillProcessHandler) // 新增

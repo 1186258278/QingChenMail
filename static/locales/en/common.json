@@ -1,7 +1,8 @@
 {
     "common.title": "QingChen Mail",
     "common.subtitle": "Enterprise Mail Solution",
-    "common.copyright": "&copy; 2026 QingChen Cloud Technology Co., Ltd.",
+    "common.copyright": "&copy; 2026",
+    "common.company_name": "QingChen Cloud",
     "common.website": "qingchencloud.com",
     "common.logout": "Logout",
     "common.confirm": "Confirm",

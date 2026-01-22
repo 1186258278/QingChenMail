@@ -6,6 +6,10 @@
     <link href="/dashboard/css/tailwind.min.css?v=8.0" rel="stylesheet">
     <script src="/dashboard/js/common.js?v=8.0"></script>
     <script src="/dashboard/js/layout.js?v=8.0"></script>
+    <style>
+        body { opacity: 0; transition: opacity 0.1s ease-in-out; }
+        body.loaded { opacity: 1; }
+    </style>
 </head>
 <body class="hidden" data-i18n-module="files">
     <div class="mb-8 flex justify-between items-center">

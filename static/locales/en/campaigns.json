@@ -16,6 +16,7 @@
     "campaigns.action.start": "Start",
     "campaigns.modal.title": "Create Campaign",
     "campaigns.modal.name": "Campaign Name",
+    "campaigns.modal.name_ph": "E.g. New Year Promo 2026",
     "campaigns.modal.sender": "Sending Channel",
     "campaigns.modal.target": "Target Group",
     "campaigns.modal.subject": "Subject",
