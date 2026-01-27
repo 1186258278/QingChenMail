@@ -61,15 +61,26 @@ func processQueue() {
 	var tasks []database.EmailQueue
 	
 	// 查找待处理任务：Pending 或 Failed 且到达重试时间
-	// 注意：并发安全问题。如果是多实例部署，这里需要锁或状态更新的原子性。
-	// 单实例部署下，简单的 Update 锁定即可。
-	// 这里简化处理：一次取出一批，并在内存中分发给 Worker
-	
+	// 排除暂停中的 Campaign 的任务
 	now := time.Now()
-	err := database.DB.Where(
+	
+	// 获取暂停中的 Campaign IDs
+	var pausedCampaignIDs []uint
+	database.DB.Model(&database.Campaign{}).
+		Where("status = 'paused'").
+		Pluck("id", &pausedCampaignIDs)
+	
+	query := database.DB.Where(
 		"(status = 'pending') OR (status = 'failed' AND retries < ? AND next_retry <= ?)", 
 		MaxRetries, now,
-	).Limit(WorkerPool).Find(&tasks).Error
+	)
+	
+	// 排除暂停的 Campaign 的任务
+	if len(pausedCampaignIDs) > 0 {
+		query = query.Where("campaign_id NOT IN ? OR campaign_id = 0", pausedCampaignIDs)
+	}
+	
+	err := query.Limit(WorkerPool).Find(&tasks).Error
 
 	if err != nil {
 		log.Printf("Error fetching queue tasks: %v", err)
@@ -189,7 +200,7 @@ func checkCampaignCompletion(campaignID uint) {
 		return
 	}
 
-	// 只有 processing 状态的任务才需要检查
+	// 只有 processing 状态的任务才需要检查（paused 状态也不自动完成）
 	if campaign.Status != "processing" {
 		return
 	}

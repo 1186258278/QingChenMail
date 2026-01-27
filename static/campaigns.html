@@ -4,12 +4,9 @@
     <meta charset="UTF-8">
     <title>营销任务 - 晴辰云邮</title>
     <link href="/dashboard/css/tailwind.min.css?v=8.0" rel="stylesheet">
+    <script src="/dashboard/js/loader.js?v=8.0"></script>
     <script src="/dashboard/js/common.js?v=8.0"></script>
     <script src="/dashboard/js/layout.js?v=8.0"></script>
-    <style>
-        body { opacity: 0; transition: opacity 0.1s ease-in-out; }
-        body.loaded { opacity: 1; }
-    </style>
 </head>
 <body class="hidden" data-i18n-module="campaigns">
     <div class="mb-8 flex justify-between items-center">
@@ -116,6 +113,8 @@
         let templates = [];
 
         async function init() {
+            // 显示骨架屏
+            Skeleton.show('campaign-list', 'card', { count: 3 });
             await Promise.all([loadCampaigns(), loadOptions()]);
         }
 
@@ -172,6 +171,7 @@
                         'draft': 'bg-gray-100 text-gray-600',
                         'scheduled': 'bg-blue-100 text-blue-600',
                         'processing': 'bg-yellow-100 text-yellow-600',
+                        'paused': 'bg-orange-100 text-orange-600',
                         'completed': 'bg-green-100 text-green-600',
                         'failed': 'bg-red-100 text-red-600'
                     };
@@ -184,43 +184,68 @@
                     const safeStatus = Utils.escapeHtml(c.status);
 
                     const div = document.createElement('div');
-                    div.className = 'bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex justify-between items-center';
+                    div.className = 'bg-white rounded-xl shadow-sm border border-gray-200 p-6';
+                    div.id = `campaign-${c.id}`;
                     div.innerHTML = `
-                        <div class="flex-1">
-                            <div class="flex items-center space-x-3 mb-2">
-                                <h3 class="text-lg font-bold text-gray-800">${safeName}</h3>
-                                <span class="px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[c.status] || 'bg-gray-100'}">
-                                    ${I18n.t(`campaigns.status.${safeStatus}`) || safeStatus}
-                                </span>
-                            </div>
-                            <p class="text-sm text-gray-500 mb-3">${safeSubject}</p>
-                            <div class="flex items-center space-x-6 text-sm text-gray-600">
-                                <span><span class="font-bold">${c.total_count}</span> <span data-i18n="campaigns.stats.total">总数</span></span>
-                                <span><span class="font-bold text-green-600">${c.success_count}</span> <span data-i18n="campaigns.stats.success">成功</span></span>
-                                <span><span class="font-bold text-red-500">${c.fail_count}</span> <span data-i18n="campaigns.stats.failed">失败</span></span>
-                                <span class="pl-4 border-l border-gray-300"><span class="font-bold text-indigo-600">${c.open_count || 0}</span> <span data-i18n="campaigns.stats.opened">已打开</span></span>
-                                <span><span class="font-bold text-blue-500">${c.click_count || 0}</span> <span data-i18n="campaigns.stats.clicked">点击</span></span>
-                                <span><span class="font-bold text-gray-500">${c.unsubscribe_count || 0}</span> <span data-i18n="campaigns.stats.unsubscribed">退订</span></span>
-                            </div>
-                        </div>
-                        
-                        <div class="flex items-center space-x-4">
-                             ${c.status === 'processing' ? `
-                                <div class="w-32 bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                                    <div class="bg-blue-600 h-2.5 rounded-full" style="width: ${progress}%"></div>
+                        <div class="flex justify-between items-center">
+                            <div class="flex-1">
+                                <div class="flex items-center space-x-3 mb-2">
+                                    <h3 class="text-lg font-bold text-gray-800">${safeName}</h3>
+                                    <span class="px-2.5 py-0.5 rounded-full text-xs font-medium ${statusColors[c.status] || 'bg-gray-100'}" id="status-badge-${c.id}">
+                                        ${I18n.t(`campaigns.status.${safeStatus}`) || safeStatus}
+                                    </span>
                                 </div>
-                             ` : ''}
-                             
-                             ${c.status === 'draft' ? `
-                                <button onclick="openTestModal(${c.id})" class="text-green-600 hover:bg-green-50 px-3 py-1.5 rounded transition text-sm font-medium" data-i18n="campaigns.action.test">测试</button>
-                                <button onclick="startCampaign(${c.id})" class="text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded transition text-sm font-medium" data-i18n="campaigns.action.start">启动</button>
-                                <button onclick="editCampaign(${c.id})" class="text-gray-600 hover:bg-gray-100 px-3 py-1.5 rounded transition text-sm" data-i18n="common.edit">编辑</button>
-                             ` : ''}
-                             
-                             <button onclick="deleteCampaign(${c.id})" class="text-red-500 hover:bg-red-50 px-3 py-1.5 rounded transition text-sm" data-i18n="common.delete">删除</button>
+                                <p class="text-sm text-gray-500 mb-3">${safeSubject}</p>
+                                <div class="flex items-center space-x-6 text-sm text-gray-600">
+                                    <span><span class="font-bold" id="total-${c.id}">${c.total_count}</span> <span data-i18n="campaigns.stats.total">总数</span></span>
+                                    <span><span class="font-bold text-green-600" id="success-${c.id}">${c.success_count}</span> <span data-i18n="campaigns.stats.success">成功</span></span>
+                                    <span><span class="font-bold text-red-500" id="fail-${c.id}">${c.fail_count}</span> <span data-i18n="campaigns.stats.failed">失败</span></span>
+                                    <span class="pl-4 border-l border-gray-300"><span class="font-bold text-indigo-600">${c.open_count || 0}</span> <span data-i18n="campaigns.stats.opened">已打开</span></span>
+                                    <span><span class="font-bold text-blue-500">${c.click_count || 0}</span> <span data-i18n="campaigns.stats.clicked">点击</span></span>
+                                    <span><span class="font-bold text-gray-500">${c.unsubscribe_count || 0}</span> <span data-i18n="campaigns.stats.unsubscribed">退订</span></span>
+                                </div>
+                            </div>
+                            
+                            <div class="flex items-center space-x-4" id="actions-${c.id}">
+                                 ${(c.status === 'processing' || c.status === 'paused') ? `
+                                    <div class="flex flex-col items-end">
+                                        <div class="w-32 bg-gray-200 rounded-full h-2.5 mb-1">
+                                            <div class="h-2.5 rounded-full transition-all duration-300 ${c.status === 'paused' ? 'bg-orange-500' : 'bg-blue-600'}" style="width: ${progress}%" id="progress-bar-${c.id}"></div>
+                                        </div>
+                                        <span class="text-xs text-gray-500" id="progress-text-${c.id}">${progress}%</span>
+                                    </div>
+                                 ` : ''}
+                                 
+                                 ${c.status === 'processing' ? `
+                                    <button onclick="pauseCampaign(${c.id})" class="text-orange-600 hover:bg-orange-50 px-3 py-1.5 rounded transition text-sm font-medium flex items-center">
+                                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                        <span data-i18n="campaigns.action.pause">暂停</span>
+                                    </button>
+                                 ` : ''}
+                                 
+                                 ${c.status === 'paused' ? `
+                                    <button onclick="resumeCampaign(${c.id})" class="text-green-600 hover:bg-green-50 px-3 py-1.5 rounded transition text-sm font-medium flex items-center">
+                                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                        <span data-i18n="campaigns.action.resume">继续</span>
+                                    </button>
+                                 ` : ''}
+                                 
+                                 ${c.status === 'draft' ? `
+                                    <button onclick="openTestModal(${c.id})" class="text-green-600 hover:bg-green-50 px-3 py-1.5 rounded transition text-sm font-medium" data-i18n="campaigns.action.test">测试</button>
+                                    <button onclick="startCampaign(${c.id})" class="text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded transition text-sm font-medium" data-i18n="campaigns.action.start">启动</button>
+                                    <button onclick="editCampaign(${c.id})" class="text-gray-600 hover:bg-gray-100 px-3 py-1.5 rounded transition text-sm" data-i18n="common.edit">编辑</button>
+                                 ` : ''}
+                                 
+                                 <button onclick="deleteCampaign(${c.id})" class="text-red-500 hover:bg-red-50 px-3 py-1.5 rounded transition text-sm" data-i18n="common.delete">删除</button>
+                            </div>
                         </div>
                     `;
                     container.appendChild(div);
+                    
+                    // 如果正在处理中，启动实时进度更新
+                    if (c.status === 'processing') {
+                        startProgressPolling(c.id);
+                    }
                 });
 
                 if (typeof I18n !== 'undefined' && I18n.isReady) I18n.render();
@@ -351,6 +376,78 @@
                 showToast(e.message, 'error');
             }
         }
+
+        // 暂停任务
+        async function pauseCampaign(id) {
+            try {
+                await request(`/campaigns/${id}/pause`, { method: 'POST' });
+                showToast(I18n.t('campaigns.action.paused') || '任务已暂停');
+                stopProgressPolling(id);
+                loadCampaigns();
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        // 恢复任务
+        async function resumeCampaign(id) {
+            try {
+                await request(`/campaigns/${id}/resume`, { method: 'POST' });
+                showToast(I18n.t('campaigns.action.resumed') || '任务已继续');
+                loadCampaigns();
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        // 实时进度轮询
+        const progressIntervals = {};
+
+        function startProgressPolling(id) {
+            // 避免重复轮询
+            if (progressIntervals[id]) return;
+            
+            progressIntervals[id] = setInterval(async () => {
+                try {
+                    const data = await request(`/campaigns/${id}/progress`);
+                    updateProgressUI(id, data);
+                    
+                    // 如果已完成或暂停，停止轮询
+                    if (data.status === 'completed' || data.status === 'paused') {
+                        stopProgressPolling(id);
+                        loadCampaigns();
+                    }
+                } catch (e) {
+                    stopProgressPolling(id);
+                }
+            }, 2000); // 每2秒更新
+        }
+
+        function stopProgressPolling(id) {
+            if (progressIntervals[id]) {
+                clearInterval(progressIntervals[id]);
+                delete progressIntervals[id];
+            }
+        }
+
+        function updateProgressUI(id, data) {
+            const progress = data.total_count > 0 ? Math.round((data.sent_count / data.total_count) * 100) : 0;
+            
+            const progressBar = document.getElementById(`progress-bar-${id}`);
+            const progressText = document.getElementById(`progress-text-${id}`);
+            const successEl = document.getElementById(`success-${id}`);
+            const failEl = document.getElementById(`fail-${id}`);
+            
+            if (progressBar) progressBar.style.width = `${progress}%`;
+            if (progressText) progressText.textContent = `${progress}%`;
+            if (successEl) successEl.textContent = data.success_count;
+            if (failEl) failEl.textContent = data.fail_count;
+        }
+
+        // 页面卸载时清理
+        window.addEventListener('beforeunload', () => {
+            Object.keys(progressIntervals).forEach(id => stopProgressPolling(id));
+        });
 
         init();
     </script>

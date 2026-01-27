@@ -90,7 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('main-content').innerHTML = bodyContent;
     document.body.classList.remove('hidden');
     
-    // 全局样式注入 (仅注入通用类，动画样式已移至 HTML Head 以避免闪烁)
+    // 全局样式注入
     const style = document.createElement('style');
     style.innerHTML = `
         body { 
@@ -100,20 +100,9 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
     document.head.appendChild(style);
 
-    // 页面加载动画
-    requestAnimationFrame(() => document.body.classList.add('loaded'));
-
-    // 拦截链接点击实现平滑切换
-    document.addEventListener('click', (e) => {
-        const link = e.target.closest('a');
-        if (link && link.href && link.href.startsWith(window.location.origin) && !link.target && !link.hasAttribute('download') && !e.ctrlKey && !e.metaKey) {
-            e.preventDefault();
-            document.body.classList.remove('loaded');
-            setTimeout(() => {
-                window.location.href = link.href;
-            }, 300); // 与 transition 时间匹配
-        }
-    });
+    // 页面加载动画由 loader.js 接管
+    // 这里只需要移除 hidden class
+    document.body.classList.remove('hidden');
 
     // 如果 I18n 已经准备好，重新渲染一下侧边栏
     if (typeof I18n !== 'undefined' && I18n.isReady) {

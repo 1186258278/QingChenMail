@@ -20,5 +20,10 @@
     "contacts.action.export": "导出",
     "contacts.action.batch_delete": "批量删除",
     "contacts.alert.delete_group": "确定要删除该分组吗？组内必须没有联系人才能删除。",
-    "contacts.alert.batch_delete": "确定要删除选中的联系人吗？"
+    "contacts.alert.batch_delete": "确定要删除选中的联系人吗？",
+    "contacts.unsubscribed.title": "退订用户",
+    "contacts.unsubscribed.empty": "暂无退订用户",
+    "contacts.unsubscribed.resubscribe": "重新订阅",
+    "contacts.unsubscribed.resubscribe_confirm": "确定要重新订阅此用户吗？",
+    "contacts.unsubscribed.resubscribed": "已重新订阅"
 }

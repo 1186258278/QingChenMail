@@ -118,6 +118,177 @@ function showToast(msg, type = 'success') {
     }, 3000);
 }
 
+// 表格排序组件
+const TableSort = {
+    // 当前排序状态
+    state: {},
+    
+    // 初始化可排序表头
+    init: (tableId, onSort) => {
+        const table = document.getElementById(tableId);
+        if (!table) return;
+        
+        const headers = table.querySelectorAll('th[data-sort]');
+        headers.forEach(th => {
+            th.classList.add('cursor-pointer', 'select-none', 'hover:bg-gray-100', 'transition');
+            th.innerHTML += `
+                <span class="sort-icon ml-1 inline-block transition-transform">
+                    <svg class="w-3 h-3 inline text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                    </svg>
+                </span>
+            `;
+            
+            th.addEventListener('click', () => {
+                const field = th.dataset.sort;
+                const currentDir = TableSort.state[tableId]?.field === field ? TableSort.state[tableId].dir : null;
+                const newDir = currentDir === 'asc' ? 'desc' : 'asc';
+                
+                // 更新状态
+                TableSort.state[tableId] = { field, dir: newDir };
+                
+                // 更新 UI
+                headers.forEach(h => {
+                    const icon = h.querySelector('.sort-icon');
+                    if (h === th) {
+                        icon.innerHTML = newDir === 'asc' 
+                            ? '<svg class="w-3 h-3 inline text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/></svg>'
+                            : '<svg class="w-3 h-3 inline text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>';
+                    } else {
+                        icon.innerHTML = '<svg class="w-3 h-3 inline text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>';
+                    }
+                });
+                
+                // 执行排序回调
+                if (onSort) onSort(field, newDir);
+            });
+        });
+    },
+    
+    // 客户端排序数据
+    sortData: (data, field, dir) => {
+        return [...data].sort((a, b) => {
+            let valA = a[field];
+            let valB = b[field];
+            
+            // 处理日期
+            if (field.includes('_at') || field.includes('time') || field.includes('date')) {
+                valA = new Date(valA).getTime();
+                valB = new Date(valB).getTime();
+            }
+            // 处理数字
+            else if (typeof valA === 'number' || !isNaN(parseFloat(valA))) {
+                valA = parseFloat(valA) || 0;
+                valB = parseFloat(valB) || 0;
+            }
+            // 字符串
+            else {
+                valA = String(valA || '').toLowerCase();
+                valB = String(valB || '').toLowerCase();
+            }
+            
+            if (valA < valB) return dir === 'asc' ? -1 : 1;
+            if (valA > valB) return dir === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }
+};
+
+// 骨架屏组件
+const Skeleton = {
+    // 生成表格骨架屏
+    table: (rows = 5, cols = 4) => {
+        let html = '';
+        for (let i = 0; i < rows; i++) {
+            html += '<tr class="animate-pulse">';
+            for (let j = 0; j < cols; j++) {
+                const width = j === 0 ? 'w-24' : (j === cols - 1 ? 'w-16' : 'w-32');
+                html += `<td class="px-6 py-4"><div class="h-4 bg-gray-200 rounded ${width}"></div></td>`;
+            }
+            html += '</tr>';
+        }
+        return html;
+    },
+    
+    // 生成卡片骨架屏
+    card: (count = 3) => {
+        let html = '';
+        for (let i = 0; i < count; i++) {
+            html += `
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 animate-pulse">
+                    <div class="flex items-center space-x-3 mb-4">
+                        <div class="h-6 bg-gray-200 rounded w-32"></div>
+                        <div class="h-5 bg-gray-200 rounded-full w-16"></div>
+                    </div>
+                    <div class="h-4 bg-gray-200 rounded w-48 mb-3"></div>
+                    <div class="flex space-x-6">
+                        <div class="h-4 bg-gray-200 rounded w-20"></div>
+                        <div class="h-4 bg-gray-200 rounded w-20"></div>
+                        <div class="h-4 bg-gray-200 rounded w-20"></div>
+                    </div>
+                </div>
+            `;
+        }
+        return html;
+    },
+    
+    // 生成列表项骨架屏
+    list: (count = 5) => {
+        let html = '';
+        for (let i = 0; i < count; i++) {
+            html += `
+                <div class="flex items-center justify-between p-4 border-b border-gray-100 animate-pulse">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-10 h-10 bg-gray-200 rounded-full"></div>
+                        <div>
+                            <div class="h-4 bg-gray-200 rounded w-32 mb-2"></div>
+                            <div class="h-3 bg-gray-200 rounded w-48"></div>
+                        </div>
+                    </div>
+                    <div class="h-8 bg-gray-200 rounded w-20"></div>
+                </div>
+            `;
+        }
+        return html;
+    },
+    
+    // 生成统计卡片骨架屏
+    stats: (count = 4) => {
+        let html = '<div class="grid grid-cols-1 md:grid-cols-4 gap-6">';
+        for (let i = 0; i < count; i++) {
+            html += `
+                <div class="bg-white/80 backdrop-blur rounded-2xl p-6 border border-white shadow-sm animate-pulse">
+                    <div class="h-4 bg-gray-200 rounded w-20 mb-3"></div>
+                    <div class="h-10 bg-gray-200 rounded w-24"></div>
+                </div>
+            `;
+        }
+        html += '</div>';
+        return html;
+    },
+    
+    // 显示骨架屏
+    show: (container, type = 'table', options = {}) => {
+        const el = typeof container === 'string' ? document.getElementById(container) : container;
+        if (!el) return;
+        
+        switch (type) {
+            case 'table':
+                el.innerHTML = Skeleton.table(options.rows || 5, options.cols || 4);
+                break;
+            case 'card':
+                el.innerHTML = Skeleton.card(options.count || 3);
+                break;
+            case 'list':
+                el.innerHTML = Skeleton.list(options.count || 5);
+                break;
+            case 'stats':
+                el.innerHTML = Skeleton.stats(options.count || 4);
+                break;
+        }
+    }
+};
+
 // 工具函数
 const Utils = {
     formatDate: (str) => new Date(str).toLocaleString(),

@@ -20,5 +20,10 @@
     "contacts.action.export": "Export",
     "contacts.action.batch_delete": "Delete Selected",
     "contacts.alert.delete_group": "Are you sure? The group must be empty to delete.",
-    "contacts.alert.batch_delete": "Delete selected contacts?"
+    "contacts.alert.batch_delete": "Delete selected contacts?",
+    "contacts.unsubscribed.title": "Unsubscribed",
+    "contacts.unsubscribed.empty": "No unsubscribed users",
+    "contacts.unsubscribed.resubscribe": "Resubscribe",
+    "contacts.unsubscribed.resubscribe_confirm": "Resubscribe this user?",
+    "contacts.unsubscribed.resubscribed": "Resubscribed successfully"
 }

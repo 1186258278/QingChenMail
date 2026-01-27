@@ -4,12 +4,9 @@
     <meta charset="UTF-8">
     <title>联系人管理 - 晴辰云邮</title>
     <link href="/dashboard/css/tailwind.min.css?v=8.0" rel="stylesheet">
+    <script src="/dashboard/js/loader.js?v=8.0"></script>
     <script src="/dashboard/js/common.js?v=8.0"></script>
     <script src="/dashboard/js/layout.js?v=8.0"></script>
-    <style>
-        body { opacity: 0; transition: opacity 0.1s ease-in-out; }
-        body.loaded { opacity: 1; }
-    </style>
 </head>
 <body class="hidden" data-i18n-module="contacts">
     <div class="mb-8 flex justify-between items-center">
@@ -215,6 +212,19 @@
                         div.querySelector('.delete-group-btn').onclick = (e) => { e.stopPropagation(); deleteGroup(e, g.id); };
                         list.appendChild(div);
                     });
+                    // 添加退订用户入口
+                    const unsubDiv = document.createElement('div');
+                    unsubDiv.className = `p-3 rounded-lg cursor-pointer flex justify-between items-center group transition mt-2 border-t border-gray-100 pt-4 ${currentGroupId === 'unsubscribed' ? 'bg-red-50 text-red-700 border border-red-100' : 'hover:bg-red-50 text-gray-600'}`;
+                    unsubDiv.onclick = () => loadUnsubscribedUsers();
+                    unsubDiv.innerHTML = `
+                        <div class="flex items-center">
+                            <svg class="w-4 h-4 mr-2 ${currentGroupId === 'unsubscribed' ? 'text-red-500' : 'text-gray-400'}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
+                            <span class="font-medium" data-i18n="contacts.unsubscribed.title">退订用户</span>
+                        </div>
+                        <span class="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full" id="unsub-count">-</span>
+                    `;
+                    list.appendChild(unsubDiv);
+                    loadUnsubscribedCount();
                 } else {
                     list.innerHTML = `<div class="text-center text-gray-400 text-sm py-4" data-i18n="contacts.groups.empty">暂无分组</div>`;
                     currentGroupId = null;
@@ -539,6 +549,85 @@
                 loadContacts();
                 loadGroups(); // update count
                 showToast(I18n.t('common.deleted'));
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        // 退订用户相关函数
+        async function loadUnsubscribedCount() {
+            try {
+                const res = await request('/contacts/unsubscribed?page_size=1');
+                const countEl = document.getElementById('unsub-count');
+                if (countEl) countEl.textContent = res.total || 0;
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function loadUnsubscribedUsers() {
+            currentGroupId = 'unsubscribed';
+            document.getElementById('current-group-name').innerHTML = `
+                <span class="flex items-center">
+                    <svg class="w-5 h-5 mr-2 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
+                    ${I18n.t('contacts.unsubscribed.title') || '退订用户'}
+                </span>
+            `;
+            
+            const mask = document.getElementById('loading-mask');
+            mask.classList.remove('hidden');
+
+            try {
+                const res = await request('/contacts/unsubscribed');
+                document.getElementById('current-group-count').textContent = res.total || 0;
+                
+                const tbody = document.getElementById('contact-list');
+                tbody.innerHTML = '';
+
+                if (!res.data || res.data.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-gray-400" data-i18n="contacts.unsubscribed.empty">暂无退订用户</td></tr>`;
+                } else {
+                    res.data.forEach(c => {
+                        const tr = document.createElement('tr');
+                        tr.className = 'hover:bg-gray-50 transition border-b border-gray-100 last:border-0';
+                        const safeEmail = Utils.escapeHtml(c.email);
+                        const safeName = Utils.escapeHtml(c.name || '-');
+                        const safeGroup = Utils.escapeHtml(c.group_name || '-');
+                        tr.innerHTML = `
+                            <td class="p-4">
+                                <input type="checkbox" class="contact-checkbox w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" data-id="${c.id}" onchange="updateBatchDeleteBtn()">
+                            </td>
+                            <td class="p-4 font-mono text-sm text-gray-700">${safeEmail}</td>
+                            <td class="p-4 text-sm text-gray-600">${safeName}</td>
+                            <td class="p-4 text-sm text-gray-400">${safeGroup}</td>
+                            <td class="p-4 text-right space-x-2">
+                                <button onclick="resubscribe(${c.id})" class="text-green-500 hover:text-green-700 text-sm font-medium" data-i18n="contacts.unsubscribed.resubscribe">重新订阅</button>
+                                <button onclick="deleteContact(${c.id})" class="text-red-500 hover:text-red-700 text-sm" data-i18n="common.delete">删除</button>
+                            </td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                }
+
+                // 隐藏分页（退订用户暂时不分页）
+                document.getElementById('pagination-info').innerText = `${I18n.t('common.total') || '共'} ${res.total} ${I18n.t('common.records') || '条'}`;
+                
+                if (typeof I18n !== 'undefined' && I18n.isReady) I18n.render();
+                loadGroups(); // 刷新分组列表高亮
+            } catch (e) {
+                showToast(e.message, 'error');
+            } finally {
+                mask.classList.add('hidden');
+            }
+        }
+
+        async function resubscribe(id) {
+            if (!confirm(I18n.t('contacts.unsubscribed.resubscribe_confirm') || '确定要重新订阅此用户吗？')) return;
+            try {
+                await request(`/contacts/${id}/resubscribe`, { method: 'POST' });
+                showToast(I18n.t('contacts.unsubscribed.resubscribed') || '已重新订阅');
+                loadUnsubscribedUsers();
+                loadUnsubscribedCount();
             } catch (e) {
                 showToast(e.message, 'error');
             }

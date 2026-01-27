@@ -13,6 +13,81 @@ import (
 )
 
 // =======================
+// Unsubscribed Users Handler
+// =======================
+
+// ListUnsubscribedHandler 获取退订用户列表
+func ListUnsubscribedHandler(c *gin.Context) {
+	page := 1
+	pageSize := 50
+
+	if p := c.Query("page"); p != "" {
+		if parsed, err := strconv.Atoi(p); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+	if ps := c.Query("page_size"); ps != "" {
+		if parsed, err := strconv.Atoi(ps); err == nil && parsed > 0 && parsed <= 100 {
+			pageSize = parsed
+		}
+	}
+
+	var total int64
+	database.DB.Model(&database.Contact{}).Where("status = 'unsubscribed'").Count(&total)
+
+	var contacts []database.Contact
+	offset := (page - 1) * pageSize
+	database.DB.Where("status = 'unsubscribed'").
+		Order("updated_at desc").
+		Limit(pageSize).
+		Offset(offset).
+		Find(&contacts)
+
+	// 获取分组名称
+	type ContactWithGroup struct {
+		database.Contact
+		GroupName string `json:"group_name"`
+	}
+
+	results := make([]ContactWithGroup, 0, len(contacts))
+	for _, contact := range contacts {
+		var group database.ContactGroup
+		groupName := ""
+		if err := database.DB.First(&group, contact.GroupID).Error; err == nil {
+			groupName = group.Name
+		}
+		results = append(results, ContactWithGroup{
+			Contact:   contact,
+			GroupName: groupName,
+		})
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"total": total,
+		"data":  results,
+		"page":  page,
+	})
+}
+
+// ResubscribeHandler 重新订阅
+func ResubscribeHandler(c *gin.Context) {
+	id := c.Param("id")
+	var contact database.Contact
+	if err := database.DB.First(&contact, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Contact not found"})
+		return
+	}
+
+	if contact.Status != "unsubscribed" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Contact is not unsubscribed"})
+		return
+	}
+
+	database.DB.Model(&contact).Update("status", "active")
+	c.JSON(http.StatusOK, gin.H{"message": "Contact resubscribed"})
+}
+
+// =======================
 // Contact Group Handlers
 // =======================
 
@@ -445,6 +520,77 @@ func DeleteCampaignHandler(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Campaign deleted"})
+}
+
+// PauseCampaignHandler 暂停营销活动
+func PauseCampaignHandler(c *gin.Context) {
+	id := c.Param("id")
+	var campaign database.Campaign
+	if err := database.DB.First(&campaign, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Campaign not found"})
+		return
+	}
+
+	if campaign.Status != "processing" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Only processing campaigns can be paused"})
+		return
+	}
+
+	database.DB.Model(&campaign).Update("status", "paused")
+	c.JSON(http.StatusOK, gin.H{"message": "Campaign paused"})
+}
+
+// ResumeCampaignHandler 恢复营销活动
+func ResumeCampaignHandler(c *gin.Context) {
+	id := c.Param("id")
+	var campaign database.Campaign
+	if err := database.DB.First(&campaign, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Campaign not found"})
+		return
+	}
+
+	if campaign.Status != "paused" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Only paused campaigns can be resumed"})
+		return
+	}
+
+	database.DB.Model(&campaign).Update("status", "processing")
+	c.JSON(http.StatusOK, gin.H{"message": "Campaign resumed"})
+}
+
+// GetCampaignProgressHandler 获取营销活动进度
+func GetCampaignProgressHandler(c *gin.Context) {
+	id := c.Param("id")
+	var campaign database.Campaign
+	if err := database.DB.First(&campaign, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Campaign not found"})
+		return
+	}
+
+	// 获取队列中的实时统计
+	var pendingCount, processingCount, completedCount, failedCount int64
+	database.DB.Model(&database.EmailQueue{}).Where("campaign_id = ? AND status = 'pending'", id).Count(&pendingCount)
+	database.DB.Model(&database.EmailQueue{}).Where("campaign_id = ? AND status = 'processing'", id).Count(&processingCount)
+	database.DB.Model(&database.EmailQueue{}).Where("campaign_id = ? AND status = 'completed'", id).Count(&completedCount)
+	database.DB.Model(&database.EmailQueue{}).Where("campaign_id = ? AND status IN ('failed', 'dead')", id).Count(&failedCount)
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":               campaign.ID,
+		"status":           campaign.Status,
+		"total_count":      campaign.TotalCount,
+		"sent_count":       campaign.SentCount,
+		"success_count":    campaign.SuccessCount,
+		"fail_count":       campaign.FailCount,
+		"open_count":       campaign.OpenCount,
+		"click_count":      campaign.ClickCount,
+		"unsubscribe_count": campaign.UnsubscribeCount,
+		"queue": gin.H{
+			"pending":    pendingCount,
+			"processing": processingCount,
+			"completed":  completedCount,
+			"failed":     failedCount,
+		},
+	})
 }
 
 // TestCampaignHandler 发送测试邮件
