@@ -1588,3 +1588,91 @@ func isInternalURLCheck(rawURL string) bool {
 	}
 	return false
 }
+
+// --- Data Cleanup Management (数据清理) ---
+
+// GetCleanupStatsHandler 获取数据统计
+func GetCleanupStatsHandler(c *gin.Context) {
+	// 避免循环导入，直接在此查询
+	var stats struct {
+		EmailLogs   int64 `json:"email_logs"`
+		InboxItems  int64 `json:"inbox_items"`
+		QueueItems  int64 `json:"queue_items"`
+		ForwardLogs int64 `json:"forward_logs"`
+		Attachments int64 `json:"attachments"`
+		TotalSize   int64 `json:"total_size"`
+	}
+
+	database.DB.Model(&database.EmailLog{}).Count(&stats.EmailLogs)
+	database.DB.Model(&database.Inbox{}).Count(&stats.InboxItems)
+	database.DB.Model(&database.EmailQueue{}).Count(&stats.QueueItems)
+	database.DB.Model(&database.ForwardLog{}).Count(&stats.ForwardLogs)
+	database.DB.Model(&database.AttachmentFile{}).Count(&stats.Attachments)
+
+	// 统计附件总大小
+	var totalSize struct {
+		Total int64
+	}
+	database.DB.Model(&database.AttachmentFile{}).Select("COALESCE(SUM(file_size), 0) as total").Scan(&totalSize)
+	stats.TotalSize = totalSize.Total
+
+	c.JSON(http.StatusOK, stats)
+}
+
+// GetCleanupConfigHandler 获取清理配置
+func GetCleanupConfigHandler(c *gin.Context) {
+	cfg := config.AppConfig
+	c.JSON(http.StatusOK, gin.H{
+		"cleanup_enabled":        cfg.CleanupEnabled,
+		"cleanup_email_log_days": cfg.CleanupEmailLogDays,
+		"cleanup_inbox_days":     cfg.CleanupInboxDays,
+		"cleanup_queue_days":     cfg.CleanupQueueDays,
+		"cleanup_forward_days":   cfg.CleanupForwardDays,
+		"cleanup_attach_days":    cfg.CleanupAttachDays,
+	})
+}
+
+// UpdateCleanupConfigHandler 更新清理配置
+func UpdateCleanupConfigHandler(c *gin.Context) {
+	var req struct {
+		CleanupEnabled      *bool `json:"cleanup_enabled"`
+		CleanupEmailLogDays *int  `json:"cleanup_email_log_days"`
+		CleanupInboxDays    *int  `json:"cleanup_inbox_days"`
+		CleanupQueueDays    *int  `json:"cleanup_queue_days"`
+		CleanupForwardDays  *int  `json:"cleanup_forward_days"`
+		CleanupAttachDays   *int  `json:"cleanup_attach_days"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 更新配置
+	if req.CleanupEnabled != nil {
+		config.AppConfig.CleanupEnabled = *req.CleanupEnabled
+	}
+	if req.CleanupEmailLogDays != nil && *req.CleanupEmailLogDays > 0 {
+		config.AppConfig.CleanupEmailLogDays = *req.CleanupEmailLogDays
+	}
+	if req.CleanupInboxDays != nil && *req.CleanupInboxDays > 0 {
+		config.AppConfig.CleanupInboxDays = *req.CleanupInboxDays
+	}
+	if req.CleanupQueueDays != nil && *req.CleanupQueueDays > 0 {
+		config.AppConfig.CleanupQueueDays = *req.CleanupQueueDays
+	}
+	if req.CleanupForwardDays != nil && *req.CleanupForwardDays > 0 {
+		config.AppConfig.CleanupForwardDays = *req.CleanupForwardDays
+	}
+	if req.CleanupAttachDays != nil && *req.CleanupAttachDays > 0 {
+		config.AppConfig.CleanupAttachDays = *req.CleanupAttachDays
+	}
+
+	// 保存配置
+	if err := config.SaveConfig(config.AppConfig); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Cleanup config updated"})
+}

@@ -39,6 +39,14 @@ type Config struct {
 	ReceiverBlacklist    string `json:"receiver_blacklist"`    // IP 黑名单，逗号分隔
 	ReceiverRequireTLS   bool `json:"receiver_require_tls"`    // 是否强制要求 TLS
 
+	// 数据清理配置
+	CleanupEnabled      bool `json:"cleanup_enabled"`        // 是否启用自动清理
+	CleanupEmailLogDays int  `json:"cleanup_email_log_days"` // 发送日志保留天数
+	CleanupInboxDays    int  `json:"cleanup_inbox_days"`     // 收件箱保留天数
+	CleanupQueueDays    int  `json:"cleanup_queue_days"`     // 队列记录保留天数
+	CleanupForwardDays  int  `json:"cleanup_forward_days"`   // 转发日志保留天数
+	CleanupAttachDays   int  `json:"cleanup_attach_days"`    // 附件保留天数
+
 	JWTSecret      string `json:"jwt_secret"`
 }
 
@@ -118,6 +126,28 @@ func LoadConfig() {
 	// 4. Web 端口 (双重保险)
 	if AppConfig.Port == "" {
 		AppConfig.Port = "9901"
+		needsSave = true
+	}
+
+	// 5. 数据清理默认值
+	if AppConfig.CleanupEmailLogDays == 0 {
+		AppConfig.CleanupEmailLogDays = 30
+		needsSave = true
+	}
+	if AppConfig.CleanupInboxDays == 0 {
+		AppConfig.CleanupInboxDays = 30
+		needsSave = true
+	}
+	if AppConfig.CleanupQueueDays == 0 {
+		AppConfig.CleanupQueueDays = 7
+		needsSave = true
+	}
+	if AppConfig.CleanupForwardDays == 0 {
+		AppConfig.CleanupForwardDays = 30
+		needsSave = true
+	}
+	if AppConfig.CleanupAttachDays == 0 {
+		AppConfig.CleanupAttachDays = 30
 		needsSave = true
 	}
 

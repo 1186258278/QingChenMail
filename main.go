@@ -10,6 +10,7 @@ import (
 	"os"
 
 	"goemail/internal/api"
+	"goemail/internal/cleanup"
 	"goemail/internal/config"
 	"goemail/internal/database"
 	"goemail/internal/mailer"
@@ -64,6 +65,9 @@ func main() {
 
 	// 启动营销任务调度器 (定时发送)
 	api.StartCampaignScheduler()
+
+	// 启动数据清理调度器
+	cleanup.StartScheduler()
 
 	// 3. 设置 Gin
 	gin.SetMode(gin.ReleaseMode)
@@ -184,6 +188,13 @@ func main() {
 			// 收件配置
 			authorized.GET("/receiver/config", api.GetReceiverConfigHandler)
 			authorized.PUT("/receiver/config", api.UpdateReceiverConfigHandler)
+
+			// 数据清理
+			authorized.GET("/cleanup/stats", api.GetCleanupStatsHandler)
+			authorized.GET("/cleanup/config", api.GetCleanupConfigHandler)
+			authorized.PUT("/cleanup/config", api.UpdateCleanupConfigHandler)
+			authorized.POST("/cleanup/run", api.RunCleanupHandler)
+			authorized.GET("/cleanup/status", api.GetCleanupStatusHandler)
 		}
 	}
 

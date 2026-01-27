@@ -197,6 +197,76 @@
             </form>
         </div>
 
+        <!-- 数据清理 -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h3 class="font-bold text-lg text-gray-800 mb-6 flex items-center">
+                <span class="bg-orange-100 text-orange-600 p-1.5 rounded-lg mr-3">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </span>
+                <span data-i18n="settings.cleanup.title">数据清理</span>
+            </h3>
+            
+            <form onsubmit="saveCleanupConfig(event)" class="space-y-5">
+                <!-- 数据统计 -->
+                <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <h4 class="text-sm font-medium text-gray-700 mb-3" data-i18n="settings.cleanup.stats_title">当前数据量</h4>
+                    <div class="grid grid-cols-2 gap-3 text-sm" id="cleanup-stats">
+                        <div class="flex justify-between"><span data-i18n="settings.cleanup.email_logs">发送日志:</span> <span id="stat-email-logs" class="font-medium">-</span></div>
+                        <div class="flex justify-between"><span data-i18n="settings.cleanup.inbox">收件箱:</span> <span id="stat-inbox" class="font-medium">-</span></div>
+                        <div class="flex justify-between"><span data-i18n="settings.cleanup.queue">队列记录:</span> <span id="stat-queue" class="font-medium">-</span></div>
+                        <div class="flex justify-between"><span data-i18n="settings.cleanup.forward">转发日志:</span> <span id="stat-forward" class="font-medium">-</span></div>
+                        <div class="flex justify-between"><span data-i18n="settings.cleanup.attach">附件文件:</span> <span id="stat-attach" class="font-medium">-</span></div>
+                        <div class="flex justify-between"><span data-i18n="settings.cleanup.attach_size">附件大小:</span> <span id="stat-size" class="font-medium">-</span></div>
+                    </div>
+                </div>
+
+                <!-- 自动清理开关 -->
+                <div class="mb-4">
+                    <label class="flex items-center cursor-pointer">
+                        <input type="checkbox" id="cleanup_enabled" class="form-checkbox h-5 w-5 text-orange-600 rounded transition">
+                        <span class="ml-2 font-medium text-gray-700" data-i18n="settings.cleanup.auto_enable">启用自动清理</span>
+                    </label>
+                    <p class="text-xs text-gray-500 mt-1 ml-7" data-i18n="settings.cleanup.auto_desc">
+                        启用后，系统将在每天凌晨 3:00 自动清理过期数据。
+                    </p>
+                </div>
+
+                <!-- 保留天数配置 -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="settings.cleanup.email_log_days">发送日志保留 (天)</label>
+                        <input type="number" id="cleanup_email_log_days" min="1" max="365" class="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-orange-500" placeholder="30">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="settings.cleanup.inbox_days">收件箱保留 (天)</label>
+                        <input type="number" id="cleanup_inbox_days" min="1" max="365" class="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-orange-500" placeholder="30">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="settings.cleanup.queue_days">队列记录保留 (天)</label>
+                        <input type="number" id="cleanup_queue_days" min="1" max="90" class="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-orange-500" placeholder="7">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="settings.cleanup.forward_days">转发日志保留 (天)</label>
+                        <input type="number" id="cleanup_forward_days" min="1" max="365" class="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-orange-500" placeholder="30">
+                    </div>
+                    <div class="col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="settings.cleanup.attach_days">附件保留 (天)</label>
+                        <input type="number" id="cleanup_attach_days" min="1" max="365" class="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-orange-500" placeholder="30">
+                    </div>
+                </div>
+
+                <div class="pt-4 space-y-3">
+                    <button type="submit" class="w-full bg-orange-600 text-white font-bold py-2.5 rounded-lg hover:bg-orange-700 transition shadow-md">
+                        <span data-i18n="settings.cleanup.save_btn">保存清理配置</span>
+                    </button>
+                    <button type="button" onclick="runCleanup()" class="w-full bg-red-50 text-red-600 border border-red-200 font-bold py-2.5 rounded-lg hover:bg-red-100 transition flex items-center justify-center">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        <span data-i18n="settings.cleanup.run_btn">立即清理</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+
         <!-- 密码与安全 -->
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col justify-between">
             <div>
@@ -510,6 +580,100 @@
         }
 
         loadConfig();
+        loadCleanupData();
+
+        // --- 数据清理相关函数 ---
+        async function loadCleanupData() {
+            try {
+                // 并行加载统计和配置
+                const [stats, cfg] = await Promise.all([
+                    request('/cleanup/stats'),
+                    request('/cleanup/config')
+                ]);
+
+                // 更新统计显示
+                document.getElementById('stat-email-logs').textContent = stats.email_logs.toLocaleString();
+                document.getElementById('stat-inbox').textContent = stats.inbox_items.toLocaleString();
+                document.getElementById('stat-queue').textContent = stats.queue_items.toLocaleString();
+                document.getElementById('stat-forward').textContent = stats.forward_logs.toLocaleString();
+                document.getElementById('stat-attach').textContent = stats.attachments.toLocaleString();
+                document.getElementById('stat-size').textContent = formatSize(stats.total_size);
+
+                // 填充配置表单
+                document.getElementById('cleanup_enabled').checked = cfg.cleanup_enabled || false;
+                document.getElementById('cleanup_email_log_days').value = cfg.cleanup_email_log_days || 30;
+                document.getElementById('cleanup_inbox_days').value = cfg.cleanup_inbox_days || 30;
+                document.getElementById('cleanup_queue_days').value = cfg.cleanup_queue_days || 7;
+                document.getElementById('cleanup_forward_days').value = cfg.cleanup_forward_days || 30;
+                document.getElementById('cleanup_attach_days').value = cfg.cleanup_attach_days || 30;
+            } catch (e) {
+                console.error('加载清理数据失败:', e);
+            }
+        }
+
+        async function saveCleanupConfig(e) {
+            e.preventDefault();
+            
+            const cfg = {
+                cleanup_enabled: document.getElementById('cleanup_enabled').checked,
+                cleanup_email_log_days: parseInt(document.getElementById('cleanup_email_log_days').value) || 30,
+                cleanup_inbox_days: parseInt(document.getElementById('cleanup_inbox_days').value) || 30,
+                cleanup_queue_days: parseInt(document.getElementById('cleanup_queue_days').value) || 7,
+                cleanup_forward_days: parseInt(document.getElementById('cleanup_forward_days').value) || 30,
+                cleanup_attach_days: parseInt(document.getElementById('cleanup_attach_days').value) || 30
+            };
+
+            try {
+                await request('/cleanup/config', { method: 'PUT', body: JSON.stringify(cfg) });
+                showToast(I18n.t('settings.toast.cleanup_saved') || '清理配置已保存');
+            } catch (e) {
+                // request 已处理错误
+            }
+        }
+
+        async function runCleanup() {
+            const confirmMsg = I18n.t('settings.alert.cleanup_confirm') || '确定要立即执行数据清理吗？这将删除超过保留期限的历史数据。';
+            if (!confirm(confirmMsg)) return;
+
+            const btn = event.target.closest('button');
+            const originalHTML = btn.innerHTML;
+            
+            try {
+                btn.disabled = true;
+                btn.innerHTML = `<svg class="w-4 h-4 mr-2 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span>${I18n.t('settings.cleanup.running') || '清理中...'}</span>`;
+
+                const res = await request('/cleanup/run', { method: 'POST' });
+
+                // 显示清理结果
+                const msg = `${I18n.t('settings.toast.cleanup_done') || '清理完成'}\n` +
+                    `- ${I18n.t('settings.cleanup.email_logs') || '发送日志'}: ${res.email_logs}\n` +
+                    `- ${I18n.t('settings.cleanup.inbox') || '收件箱'}: ${res.inbox_items}\n` +
+                    `- ${I18n.t('settings.cleanup.queue') || '队列记录'}: ${res.queue_items}\n` +
+                    `- ${I18n.t('settings.cleanup.forward') || '转发日志'}: ${res.forward_logs}\n` +
+                    `- ${I18n.t('settings.cleanup.attach') || '附件文件'}: ${res.attachments}\n` +
+                    `- ${I18n.t('settings.cleanup.freed') || '释放空间'}: ${formatSize(res.freed_bytes)}\n` +
+                    `- ${I18n.t('settings.cleanup.duration') || '耗时'}: ${res.duration_ms}ms`;
+
+                showToast(I18n.t('settings.toast.cleanup_done') || '清理完成', 'success');
+                alert(msg);
+
+                // 重新加载统计
+                loadCleanupData();
+            } catch (e) {
+                // request 已处理错误
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+            }
+        }
+
+        function formatSize(bytes) {
+            if (!bytes || bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
     </script>
 </body>
 </html>
