@@ -154,7 +154,14 @@ func runSeeding() {
 	DB.Model(&User{}).Where("username = ?", "admin").Count(&adminCount)
 	if adminCount == 0 {
 		log.Println("[DB] Seeding default admin user...")
-		DB.Create(&User{Username: "admin", Password: "123456"})
+		// [安全修复] 使用 Bcrypt 哈希存储默认密码，而非明文
+		hashedPassword, err := HashPassword("123456")
+		if err != nil {
+			log.Printf("[DB] Warning: Failed to hash default password: %v, using plain text", err)
+			DB.Create(&User{Username: "admin", Password: "123456"})
+		} else {
+			DB.Create(&User{Username: "admin", Password: hashedPassword})
+		}
 	}
 
 	// 2. 校准示例模板

@@ -13,6 +13,7 @@ import (
 	"net/smtp"
 	"net/url"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -81,9 +82,20 @@ func SendEmail(req SendRequest) error {
 			// 2. 检查是否为本地文件 (由 Handler 预处理并保存)
 			if strings.HasPrefix(att.URL, "local://") {
 				localPath := strings.TrimPrefix(att.URL, "local://")
+
+				// [安全修复] 路径遍历防护
+				// 1. 清理路径，防止 ../ 等遍历攻击
+				localPath = filepath.Clean(localPath)
+
+				// 2. 验证路径是否在允许的目录内
+				allowedDir, _ := filepath.Abs("data/uploads")
+				absPath, err := filepath.Abs(localPath)
+				if err != nil || !strings.HasPrefix(absPath, allowedDir) {
+					return logAndReturnError(req, fmt.Sprintf("blocked_path_traversal: %s", localPath), fmt.Errorf("access to path outside allowed directory is blocked"))
+				}
+
 				// 读取本地文件
-				// 注意：这里没有复杂的安全校验，因为假定 local:// 只能由后端内部生成
-				fileData, err := os.ReadFile(localPath)
+				fileData, err := os.ReadFile(absPath)
 				if err != nil {
 					return logAndReturnError(req, fmt.Sprintf("failed_read_local_attachment: %s", localPath), err)
 				}

@@ -151,16 +151,17 @@
                 document.getElementById('msg-to').innerText = msg.to_addr;
                 document.getElementById('msg-date').innerText = new Date(msg.created_at).toLocaleString();
                 
-                // 简单的 HTML 处理，防止 XSS
-                // 实际上邮件正文可能包含 HTML，这里直接设置 innerHTML 有风险
-                // 生产环境应使用 DOMPurify
-                // 这里我们假设后端存的是清洗过的或仅文本，或者信任内容
-                // 如果是纯文本，将其包装在 pre 中
+                // [安全修复] 使用 sanitizeHtml 防止 XSS 攻击
+                // 邮件正文可能包含 HTML，但需要移除危险标签和属性
+                const msgBody = document.getElementById('msg-body');
                 if (msg.body && (msg.body.includes('<html') || msg.body.includes('<div') || msg.body.includes('<p'))) {
-                     document.getElementById('msg-body').innerHTML = msg.body;
+                     // HTML 内容：使用 sanitizeHtml 净化后再渲染
+                     msgBody.innerHTML = Utils.sanitizeHtml(msg.body);
+                     msgBody.style.whiteSpace = 'normal';
                 } else {
-                     document.getElementById('msg-body').innerText = msg.body || '(无内容)';
-                     document.getElementById('msg-body').style.whiteSpace = 'pre-wrap';
+                     // 纯文本内容：使用 innerText 安全渲染
+                     msgBody.innerText = msg.body || '(无内容)';
+                     msgBody.style.whiteSpace = 'pre-wrap';
                 }
 
                 // 标记列表项为已读 (重新加载列表)

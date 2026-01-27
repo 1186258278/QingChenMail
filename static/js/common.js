@@ -121,13 +121,52 @@ function showToast(msg, type = 'success') {
 // 工具函数
 const Utils = {
     formatDate: (str) => new Date(str).toLocaleString(),
+    // [安全修复] 正确的 HTML 转义函数，防止 XSS 攻击
     escapeHtml: (unsafe) => {
         if (!unsafe) return '';
-        return unsafe
-             .replace(/&/g, '&')
-             .replace(/</g, '<')
-             .replace(/>/g, '>')
-             .replace(/"/g, '"')
+        return String(unsafe)
+             .replace(/&/g, '&amp;')
+             .replace(/</g, '&lt;')
+             .replace(/>/g, '&gt;')
+             .replace(/"/g, '&quot;')
              .replace(/'/g, '&#039;');
+    },
+    // [安全修复] 简单的 HTML 净化函数 (生产环境建议使用 DOMPurify)
+    sanitizeHtml: (html) => {
+        if (!html) return '';
+        // 创建一个临时 div 来解析 HTML
+        const div = document.createElement('div');
+        div.innerHTML = html;
+        
+        // 移除危险标签
+        const dangerousTags = ['script', 'iframe', 'object', 'embed', 'form', 'input', 'link', 'style'];
+        dangerousTags.forEach(tag => {
+            const elements = div.querySelectorAll(tag);
+            elements.forEach(el => el.remove());
+        });
+        
+        // 移除危险属性
+        const allElements = div.querySelectorAll('*');
+        allElements.forEach(el => {
+            // 移除所有 on* 事件处理器
+            const attrs = [...el.attributes];
+            attrs.forEach(attr => {
+                if (attr.name.startsWith('on') || 
+                    attr.value.toLowerCase().includes('javascript:') ||
+                    attr.value.toLowerCase().includes('vbscript:')) {
+                    el.removeAttribute(attr.name);
+                }
+            });
+            // 移除 src/href 中的 javascript:
+            ['src', 'href', 'action'].forEach(attrName => {
+                const val = el.getAttribute(attrName);
+                if (val && (val.toLowerCase().trim().startsWith('javascript:') || 
+                            val.toLowerCase().trim().startsWith('vbscript:'))) {
+                    el.removeAttribute(attrName);
+                }
+            });
+        });
+        
+        return div.innerHTML;
     }
 };

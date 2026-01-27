@@ -69,12 +69,15 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 
+	// [安全修复] 添加请求体大小限制 (32MB)
+	r.MaxMultipartMemory = 32 << 20
+
 	// 4. API 路由
 	apiGroup := r.Group("/api/v1")
 	{
-		// 公开接口
-		apiGroup.POST("/login", api.LoginHandler)
-		apiGroup.GET("/captcha", api.CaptchaHandler)
+		// 公开接口 (添加速率限制)
+		apiGroup.POST("/login", api.RateLimitMiddleware(api.GetLoginLimiter()), api.LoginHandler)
+		apiGroup.GET("/captcha", api.RateLimitMiddleware(api.GetCaptchaLimiter()), api.CaptchaHandler)
 		apiGroup.GET("/wallpaper", api.WallpaperHandler)
 
 		// 追踪接口 (公开)

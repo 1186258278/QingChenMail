@@ -373,14 +373,49 @@ func formatForwardBody(from, originalTo, rawData string) string {
 </div>`, from, originalTo, body)
 }
 
+// isValidPort 验证端口号是否为纯数字 (防止命令注入)
+func isValidPort(port string) bool {
+	if port == "" {
+		return false
+	}
+	for _, c := range port {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 func checkPortOccupancy(port string) {
+	// [安全修复] 验证端口号，防止命令注入
+	if !isValidPort(port) {
+		log.Printf("[Receiver] Invalid port number: %s", port)
+		return
+	}
+
 	log.Printf("[Receiver] Checking port %s usage...", port)
 	if runtime.GOOS == "windows" {
-		cmd := exec.Command("cmd", "/C", fmt.Sprintf("netstat -ano | findstr :%s", port))
-		out, _ := cmd.Output()
-		if len(out) > 0 {
-			log.Printf("[Receiver] Port occupied details:\n%s", string(out))
-			log.Println("[Receiver] Tip: Use 'tasklist | findstr <PID>' to find the process name.")
+		// [安全修复] 不使用 cmd /C 和管道，直接调用 netstat 并在 Go 中过滤
+		cmd := exec.Command("netstat", "-ano")
+		out, err := cmd.Output()
+		if err != nil {
+			log.Printf("[Receiver] Failed to run netstat: %v", err)
+			return
+		}
+		
+		// 在 Go 中过滤包含端口的行
+		lines := strings.Split(string(out), "\n")
+		targetPort := ":" + port
+		var matchedLines []string
+		for _, line := range lines {
+			if strings.Contains(line, targetPort) && strings.Contains(line, "LISTENING") {
+				matchedLines = append(matchedLines, strings.TrimSpace(line))
+			}
+		}
+		
+		if len(matchedLines) > 0 {
+			log.Printf("[Receiver] Port occupied details:\n%s", strings.Join(matchedLines, "\n"))
+			log.Println("[Receiver] Tip: Use 'tasklist /FI \"PID eq <PID>\"' to find the process name.")
 		}
 	} else {
 		cmd := exec.Command("lsof", "-i", ":"+port)

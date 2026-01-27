@@ -3,6 +3,8 @@ package api
 import (
 	"encoding/base64"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"goemail/internal/database"
@@ -10,6 +12,38 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+// validateRedirectURL 验证重定向URL安全性 (防止开放重定向攻击)
+func validateRedirectURL(targetURL string) bool {
+	// 1. 只允许 http 和 https 协议
+	if !strings.HasPrefix(targetURL, "http://") && !strings.HasPrefix(targetURL, "https://") {
+		return false
+	}
+
+	// 2. 解析 URL
+	u, err := url.Parse(targetURL)
+	if err != nil {
+		return false
+	}
+
+	// 3. 禁止 javascript:, data:, vbscript: 等伪协议
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return false
+	}
+
+	// 4. 禁止空主机名
+	if u.Host == "" {
+		return false
+	}
+
+	// 5. 禁止包含用户信息 (user:pass@host 形式的钓鱼URL)
+	if u.User != nil {
+		return false
+	}
+
+	return true
+}
 
 // TrackOpenHandler 处理邮件打开追踪像素
 // GET /api/v1/track/open/:id
@@ -89,6 +123,12 @@ func TrackClickHandler(c *gin.Context) {
 		return
 	}
 	targetURL := string(targetURLBytes)
+
+	// [安全修复] 验证重定向URL，防止开放重定向攻击
+	if !validateRedirectURL(targetURL) {
+		c.String(http.StatusBadRequest, "Invalid or unsafe redirect URL")
+		return
+	}
 
 	// 1. 查找日志
 	var log database.EmailLog

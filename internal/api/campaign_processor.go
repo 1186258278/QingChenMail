@@ -1,9 +1,11 @@
 package api
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"html"
 	"log"
 	"regexp"
 	"strings"
@@ -13,6 +15,14 @@ import (
 	"goemail/internal/database"
 
 	"github.com/google/uuid"
+)
+
+// 营销任务处理配置常量
+const (
+	// CampaignProcessTimeout 单个营销任务处理的最大超时时间
+	CampaignProcessTimeout = 30 * time.Minute
+	// CampaignBatchSize 每批处理的联系人数量
+	CampaignBatchSize = 100
 )
 
 // ProcessCampaign 执行营销任务的发送逻辑 (入队)
@@ -53,14 +63,40 @@ func ProcessCampaign(campaign *database.Campaign) error {
 		"sent_count":  0,
 	})
 
+	// [安全修复] 使用带 context 的 goroutine，支持超时和取消
+	ctx, cancel := context.WithTimeout(context.Background(), CampaignProcessTimeout)
+	
 	go func() {
+		// [安全修复] 添加 panic 恢复，防止 goroutine panic 导致程序崩溃
+		defer func() {
+			cancel() // 确保 context 被取消
+			if r := recover(); r != nil {
+				log.Printf("[Campaign] Panic recovered in campaign %d: %v", campaign.ID, r)
+				database.DB.Model(campaign).Update("status", "failed")
+			}
+		}()
+
 		for _, contact := range contacts {
+			// 检查 context 是否已取消或超时
+			select {
+			case <-ctx.Done():
+				log.Printf("[Campaign] Campaign %d processing cancelled or timed out", campaign.ID)
+				database.DB.Model(campaign).Update("status", "failed")
+				return
+			default:
+				// 继续处理
+			}
+
 			// Generate Tracking ID
 			trackingID := uuid.New().String()
 
-			// Replace variables
-			body := strings.ReplaceAll(campaign.Body, "{name}", contact.Name)
-			body = strings.ReplaceAll(body, "{email}", contact.Email)
+			// [安全修复] 对用户输入进行 HTML 转义，防止 XSS 攻击
+			safeName := html.EscapeString(contact.Name)
+			safeEmail := html.EscapeString(contact.Email)
+
+			// Replace variables with escaped values
+			body := strings.ReplaceAll(campaign.Body, "{name}", safeName)
+			body = strings.ReplaceAll(body, "{email}", safeEmail)
 
 			// 注入追踪像素 (Tracking Pixel)
 			baseURL := strings.TrimSuffix(config.AppConfig.BaseURL, "/") // 假设 config 中有 BaseURL

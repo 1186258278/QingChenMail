@@ -40,6 +40,91 @@ var (
 	releaseMutex       sync.Mutex
 )
 
+// --- 速率限制器 ---
+
+// RateLimiter 简单的基于 IP 的速率限制器
+type RateLimiter struct {
+	requests map[string][]time.Time
+	mu       sync.Mutex
+	limit    int           // 时间窗口内最大请求数
+	window   time.Duration // 时间窗口
+}
+
+// NewRateLimiter 创建速率限制器
+func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
+	return &RateLimiter{
+		requests: make(map[string][]time.Time),
+		limit:    limit,
+		window:   window,
+	}
+}
+
+// Allow 检查是否允许请求
+func (rl *RateLimiter) Allow(ip string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	now := time.Now()
+	windowStart := now.Add(-rl.window)
+
+	// 获取该 IP 的请求记录
+	reqs, exists := rl.requests[ip]
+	if !exists {
+		rl.requests[ip] = []time.Time{now}
+		return true
+	}
+
+	// 过滤掉窗口外的请求
+	var validReqs []time.Time
+	for _, t := range reqs {
+		if t.After(windowStart) {
+			validReqs = append(validReqs, t)
+		}
+	}
+
+	// 检查是否超限
+	if len(validReqs) >= rl.limit {
+		rl.requests[ip] = validReqs
+		return false
+	}
+
+	// 添加新请求
+	validReqs = append(validReqs, now)
+	rl.requests[ip] = validReqs
+	return true
+}
+
+// 全局速率限制器实例
+var (
+	// 登录接口限制：每分钟最多 10 次请求
+	loginLimiter = NewRateLimiter(10, time.Minute)
+	// 验证码接口限制：每分钟最多 20 次请求
+	captchaLimiter = NewRateLimiter(20, time.Minute)
+)
+
+// RateLimitMiddleware 速率限制中间件
+func RateLimitMiddleware(limiter *RateLimiter) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ip := c.ClientIP()
+		if !limiter.Allow(ip) {
+			c.JSON(http.StatusTooManyRequests, gin.H{"error": "Too many requests, please try again later"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+// GetLoginLimiter 获取登录限制器 (供 main.go 使用)
+func GetLoginLimiter() *RateLimiter {
+	return loginLimiter
+}
+
+// GetCaptchaLimiter 获取验证码限制器 (供 main.go 使用)
+func GetCaptchaLimiter() *RateLimiter {
+	return captchaLimiter
+}
+
 // CheckUpdateHandler 检查 GitHub 更新 (带缓存的后端代理)
 func CheckUpdateHandler(c *gin.Context) {
 	releaseMutex.Lock()
@@ -143,10 +228,17 @@ func AuthMiddleware() gin.HandlerFunc {
 	}
 }
 
-// Captcha Store
+// Captcha Store (带过期时间)
+type captchaEntry struct {
+	Code      string
+	ExpiresAt time.Time
+}
+
 var (
-	captchaStore = make(map[string]string)
-	captchaMutex sync.Mutex
+	captchaStore      = make(map[string]captchaEntry)
+	captchaMutex      sync.Mutex
+	captchaExpiration = 5 * time.Minute // 验证码有效期 5 分钟
+	captchaMaxSize    = 1000            // 最大存储数量
 )
 
 // LoginHandler 登录接口
@@ -165,12 +257,13 @@ func LoginHandler(c *gin.Context) {
 	// 1. 验证码校验
 	if req.CaptchaID != "" {
 		captchaMutex.Lock()
-		realCode, ok := captchaStore[req.CaptchaID]
+		entry, ok := captchaStore[req.CaptchaID]
 		delete(captchaStore, req.CaptchaID) // 一次性
 		captchaMutex.Unlock()
 
-		if !ok || realCode != req.CaptchaCode {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid captcha code"})
+		// [安全修复] 验证码过期检查
+		if !ok || entry.Code != req.CaptchaCode || time.Now().After(entry.ExpiresAt) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired captcha code"})
 			return
 		}
 	} else {
@@ -247,7 +340,10 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
-	c.SetCookie("token", tokenString, 3600*24, "/", "", false, true)
+	// [安全修复] 根据 SSL 配置动态设置 Secure 标志
+	// Secure=true 时，Cookie 仅通过 HTTPS 传输
+	secureCookie := config.AppConfig.EnableSSL
+	c.SetCookie("token", tokenString, 3600*24, "/", "", secureCookie, true)
 	c.JSON(http.StatusOK, gin.H{"token": tokenString})
 }
 
@@ -913,20 +1009,21 @@ func BackupHandler(c *gin.Context) {
 	files := []string{"config.json", "goemail.db"}
 
 	for _, filename := range files {
-		f, err := os.Open(filename)
-		if err != nil {
-			continue
-		}
-		defer f.Close()
+		// [安全修复] 使用闭包立即处理文件，避免 defer 在循环中累积导致资源泄露
+		func() {
+			f, err := os.Open(filename)
+			if err != nil {
+				return
+			}
+			defer f.Close() // 现在 defer 在闭包内，会在每次迭代后立即执行
 
-		w, err := zipWriter.Create(filename)
-		if err != nil {
-			continue
-		}
+			w, err := zipWriter.Create(filename)
+			if err != nil {
+				return
+			}
 
-		if _, err := io.Copy(w, f); err != nil {
-			continue
-		}
+			io.Copy(w, f)
+		}()
 	}
 }
 
@@ -943,11 +1040,30 @@ func CaptchaHandler(c *gin.Context) {
 	id := generateRandomKey() // 复用随机字符串生成
 
 	captchaMutex.Lock()
-	captchaStore[id] = code
-	// 简单的清理逻辑：如果太大则清空（生产环境应用过期清理 goroutine）
-	if len(captchaStore) > 1000 {
-		captchaStore = make(map[string]string)
-		captchaStore[id] = code
+	// [安全修复] 改进的验证码清理逻辑：只清理过期的，而非全部清空
+	now := time.Now()
+	if len(captchaStore) >= captchaMaxSize {
+		// 清理过期的验证码
+		for k, v := range captchaStore {
+			if now.After(v.ExpiresAt) {
+				delete(captchaStore, k)
+			}
+		}
+		// 如果清理后仍然超限，删除最旧的一半
+		if len(captchaStore) >= captchaMaxSize {
+			count := 0
+			for k := range captchaStore {
+				delete(captchaStore, k)
+				count++
+				if count >= captchaMaxSize/2 {
+					break
+				}
+			}
+		}
+	}
+	captchaStore[id] = captchaEntry{
+		Code:      code,
+		ExpiresAt: now.Add(captchaExpiration),
 	}
 	captchaMutex.Unlock()
 
