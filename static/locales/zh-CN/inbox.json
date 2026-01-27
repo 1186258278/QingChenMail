@@ -5,5 +5,9 @@
     "inbox.no_subject": "(无主题)",
     "inbox.from": "发件人:",
     "inbox.to": "收件人:",
-    "inbox.select_msg": "选择一封邮件查看详情"
+    "inbox.select_msg": "选择一封邮件查看详情",
+    "inbox.select_all": "全选",
+    "inbox.select_first": "请先选择邮件",
+    "inbox.batch_delete_confirm": "确定要删除选中的 {count} 封邮件吗？",
+    "inbox.unread": "封未读"
 }

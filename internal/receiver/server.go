@@ -2,18 +2,30 @@ package receiver
 
 import (
 	"bufio"
+	"bytes"
+	"crypto/tls"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
+	"mime"
+	"mime/multipart"
+	"mime/quotedprintable"
 	"net"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"goemail/internal/config"
 	"goemail/internal/database"
 	"goemail/internal/mailer"
+
+	"golang.org/x/text/encoding/charmap"
+	"golang.org/x/text/encoding/simplifiedchinese"
 )
 
 // SMTPSession 表示一个 SMTP 会话
@@ -25,6 +37,154 @@ type SMTPSession struct {
 	to         []string
 	data       strings.Builder
 	inData     bool
+	tlsEnabled bool
+}
+
+// RateLimiter IP 速率限制器
+type RateLimiter struct {
+	mu       sync.RWMutex
+	requests map[string][]time.Time
+	limit    int           // 每分钟最大请求数
+	window   time.Duration // 时间窗口
+}
+
+var (
+	rateLimiter *RateLimiter
+	blacklistIPs map[string]bool
+	blacklistMu  sync.RWMutex
+	tlsConfig   *tls.Config
+)
+
+// NewRateLimiter 创建速率限制器
+func NewRateLimiter(limit int) *RateLimiter {
+	rl := &RateLimiter{
+		requests: make(map[string][]time.Time),
+		limit:    limit,
+		window:   time.Minute,
+	}
+	// 定期清理过期记录
+	go func() {
+		for {
+			time.Sleep(time.Minute)
+			rl.cleanup()
+		}
+	}()
+	return rl
+}
+
+// Allow 检查 IP 是否允许连接
+func (rl *RateLimiter) Allow(ip string) bool {
+	if rl.limit <= 0 {
+		return true // 不限制
+	}
+
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	now := time.Now()
+	cutoff := now.Add(-rl.window)
+
+	// 清理旧记录
+	var valid []time.Time
+	for _, t := range rl.requests[ip] {
+		if t.After(cutoff) {
+			valid = append(valid, t)
+		}
+	}
+	rl.requests[ip] = valid
+
+	// 检查是否超限
+	if len(rl.requests[ip]) >= rl.limit {
+		return false
+	}
+
+	rl.requests[ip] = append(rl.requests[ip], now)
+	return true
+}
+
+func (rl *RateLimiter) cleanup() {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	cutoff := time.Now().Add(-rl.window)
+	for ip, times := range rl.requests {
+		var valid []time.Time
+		for _, t := range times {
+			if t.After(cutoff) {
+				valid = append(valid, t)
+			}
+		}
+		if len(valid) == 0 {
+			delete(rl.requests, ip)
+		} else {
+			rl.requests[ip] = valid
+		}
+	}
+}
+
+// 更新黑名单
+func updateBlacklist() {
+	blacklistMu.Lock()
+	defer blacklistMu.Unlock()
+
+	blacklistIPs = make(map[string]bool)
+	if config.AppConfig.ReceiverBlacklist == "" {
+		return
+	}
+
+	for _, ip := range strings.Split(config.AppConfig.ReceiverBlacklist, ",") {
+		ip = strings.TrimSpace(ip)
+		if ip != "" {
+			blacklistIPs[ip] = true
+		}
+	}
+}
+
+// 检查 IP 是否在黑名单
+func isBlacklisted(ip string) bool {
+	// 提取纯 IP（去掉端口）
+	host, _, _ := net.SplitHostPort(ip)
+	if host == "" {
+		host = ip
+	}
+
+	blacklistMu.RLock()
+	defer blacklistMu.RUnlock()
+	return blacklistIPs[host]
+}
+
+// 加载 TLS 配置
+func loadTLSConfig() *tls.Config {
+	if !config.AppConfig.ReceiverTLS {
+		return nil
+	}
+
+	certFile := config.AppConfig.ReceiverTLSCert
+	keyFile := config.AppConfig.ReceiverTLSKey
+
+	// 如果没有配置独立证书，尝试使用 Web 服务器的证书
+	if certFile == "" {
+		certFile = config.AppConfig.CertFile
+	}
+	if keyFile == "" {
+		keyFile = config.AppConfig.KeyFile
+	}
+
+	if certFile == "" || keyFile == "" {
+		log.Println("[Receiver] TLS enabled but no certificate configured")
+		return nil
+	}
+
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		log.Printf("[Receiver] Failed to load TLS certificate: %v", err)
+		return nil
+	}
+
+	return &tls.Config{
+		Certificates: []tls.Certificate{cert},
+		MinVersion:   tls.VersionTLS12,
+	}
 }
 
 // StartReceiver 启动 SMTP 接收服务
@@ -32,6 +192,18 @@ func StartReceiver() {
 	if !config.AppConfig.EnableReceiver {
 		log.Println("[Receiver] Disabled, skipping...")
 		return
+	}
+
+	// 初始化速率限制器
+	rateLimiter = NewRateLimiter(config.AppConfig.ReceiverRateLimit)
+
+	// 加载黑名单
+	updateBlacklist()
+
+	// 加载 TLS 配置
+	tlsConfig = loadTLSConfig()
+	if tlsConfig != nil {
+		log.Println("[Receiver] STARTTLS enabled")
 	}
 
 	port := config.AppConfig.ReceiverPort
@@ -49,7 +221,7 @@ func StartReceiver() {
 		return
 	}
 
-	log.Printf("[Receiver] SMTP receiver started on %s", addr)
+	log.Printf("[Receiver] SMTP receiver started on %s (rate limit: %d/min)", addr, config.AppConfig.ReceiverRateLimit)
 
 	go func() {
 		for {
@@ -65,11 +237,27 @@ func StartReceiver() {
 
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
-	
+
+	remoteIP := conn.RemoteAddr().String()
+
+	// 检查黑名单
+	if isBlacklisted(remoteIP) {
+		log.Printf("[Receiver] Blocked blacklisted IP: %s", remoteIP)
+		conn.Write([]byte("554 Your IP is blocked\r\n"))
+		return
+	}
+
+	// 检查速率限制
+	if !rateLimiter.Allow(remoteIP) {
+		log.Printf("[Receiver] Rate limit exceeded for IP: %s", remoteIP)
+		conn.Write([]byte("421 Too many connections, try again later\r\n"))
+		return
+	}
+
 	session := &SMTPSession{
 		conn:     conn,
 		reader:   bufio.NewReader(conn),
-		remoteIP: conn.RemoteAddr().String(),
+		remoteIP: remoteIP,
 		to:       make([]string, 0),
 	}
 
@@ -108,6 +296,14 @@ func handleConnection(conn net.Conn) {
 				session.to = make([]string, 0)
 				session.data.Reset()
 			} else {
+				// 检查邮件大小限制
+				maxSize := config.AppConfig.ReceiverMaxMsgSize * 1024
+				if maxSize > 0 && session.data.Len()+len(line) > maxSize {
+					session.inData = false
+					session.send("552 Message size exceeds limit")
+					session.data.Reset()
+					continue
+				}
 				// 处理透明点 (dot stuffing)
 				if strings.HasPrefix(line, "..") {
 					line = line[1:]
@@ -128,6 +324,8 @@ func handleConnection(conn net.Conn) {
 			session.handleRcptTo(line)
 		} else if cmd == "DATA" {
 			session.handleData()
+		} else if cmd == "STARTTLS" {
+			session.handleStartTLS()
 		} else if cmd == "QUIT" {
 			session.send("221 Bye")
 			return
@@ -149,7 +347,6 @@ func (s *SMTPSession) send(msg string) {
 }
 
 func (s *SMTPSession) handleHelo(line string) {
-	// 简单响应 EHLO/HELO
 	parts := strings.SplitN(line, " ", 2)
 	if len(parts) < 2 {
 		s.send("501 Syntax error")
@@ -159,15 +356,55 @@ func (s *SMTPSession) handleHelo(line string) {
 	cmd := strings.ToUpper(parts[0])
 	if cmd == "EHLO" {
 		s.send("250-GoEmail")
-		s.send("250-SIZE 10485760")
-		s.send("250 8BITMIME")
+		s.send(fmt.Sprintf("250-SIZE %d", config.AppConfig.ReceiverMaxMsgSize*1024))
+		s.send("250-8BITMIME")
+		if tlsConfig != nil && !s.tlsEnabled {
+			s.send("250-STARTTLS")
+		}
+		s.send("250 OK")
 	} else {
 		s.send("250 GoEmail")
 	}
 }
 
+func (s *SMTPSession) handleStartTLS() {
+	if tlsConfig == nil {
+		s.send("454 TLS not available")
+		return
+	}
+	if s.tlsEnabled {
+		s.send("503 TLS already active")
+		return
+	}
+
+	s.send("220 Ready to start TLS")
+
+	// 升级到 TLS
+	tlsConn := tls.Server(s.conn, tlsConfig)
+	if err := tlsConn.Handshake(); err != nil {
+		log.Printf("[Receiver] TLS handshake failed from %s: %v", s.remoteIP, err)
+		return
+	}
+
+	s.conn = tlsConn
+	s.reader = bufio.NewReader(tlsConn)
+	s.tlsEnabled = true
+
+	// 重置会话状态
+	s.from = ""
+	s.to = make([]string, 0)
+	s.data.Reset()
+
+	log.Printf("[Receiver] TLS connection established from %s", s.remoteIP)
+}
+
 func (s *SMTPSession) handleMailFrom(line string) {
-	// 解析 MAIL FROM:<address>
+	// 检查是否强制要求 TLS
+	if config.AppConfig.ReceiverRequireTLS && !s.tlsEnabled {
+		s.send("530 Must issue STARTTLS command first")
+		return
+	}
+
 	addr := extractEmail(line[10:])
 	if addr == "" {
 		s.send("501 Syntax error in MAIL FROM")
@@ -178,7 +415,6 @@ func (s *SMTPSession) handleMailFrom(line string) {
 }
 
 func (s *SMTPSession) handleRcptTo(line string) {
-	// 解析 RCPT TO:<address>
 	addr := extractEmail(line[8:])
 	if addr == "" {
 		s.send("501 Syntax error in RCPT TO")
@@ -192,9 +428,8 @@ func (s *SMTPSession) handleRcptTo(line string) {
 		return
 	}
 
-	// 记录收件人，带上 domain 信息以便后续处理
 	s.to = append(s.to, addr)
-	_ = domain // 后续在 processEmail 中使用
+	_ = domain
 	s.send("250 OK")
 }
 
@@ -214,22 +449,27 @@ func (s *SMTPSession) handleData() {
 func (s *SMTPSession) processEmail() error {
 	rawData := s.data.String()
 	
-	// 解析邮件头
-	subject := extractHeader(rawData, "Subject")
+	// 解析 MIME 邮件
+	parsed := parseMIMEMessage(rawData)
 	
 	// 对每个收件人进行处理
 	for _, rcpt := range s.to {
-		// 1. 保存到 Inbox (始终保存，除非被黑名单拦截 - 这里暂无黑名单)
+		// 1. 保存到 Inbox
 		inboxItem := database.Inbox{
 			FromAddr: s.from,
 			ToAddr:   rcpt,
-			Subject:  subject,
-			Body:     formatInboxBody(rawData), // 简单提取正文
+			Subject:  parsed.Subject,
+			Body:     parsed.Body,
 			RawData:  rawData,
 			RemoteIP: s.remoteIP,
 			IsRead:   false,
 		}
 		database.DB.Create(&inboxItem)
+
+		// 保存附件
+		for _, att := range parsed.Attachments {
+			saveInboxAttachment(inboxItem.ID, att)
+		}
 
 		// 2. 查找转发规则并转发
 		rule, _ := findForwardRule(rcpt)
@@ -241,20 +481,18 @@ func (s *SMTPSession) processEmail() error {
 		forwardReq := mailer.SendRequest{
 			From:    s.from,
 			To:      rule.ForwardTo,
-			Subject: fmt.Sprintf("[转发] %s", subject),
-			Body:    formatForwardBody(s.from, rcpt, rawData),
+			Subject: fmt.Sprintf("[转发] %s", parsed.Subject),
+			Body:    formatForwardBody(s.from, rcpt, parsed.Body),
 		}
 
-		// 加入发送队列
 		_, err := mailer.SendEmailAsync(forwardReq)
 		
-		// 记录转发日志
 		logEntry := database.ForwardLog{
 			RuleID:    rule.ID,
 			FromAddr:  s.from,
 			ToAddr:    rcpt,
 			ForwardTo: rule.ForwardTo,
-			Subject:   subject,
+			Subject:   parsed.Subject,
 			RemoteIP:  s.remoteIP,
 		}
 
@@ -271,6 +509,287 @@ func (s *SMTPSession) processEmail() error {
 	return nil
 }
 
+// ParsedEmail 解析后的邮件结构
+type ParsedEmail struct {
+	Subject     string
+	Body        string
+	ContentType string
+	Attachments []ParsedAttachment
+}
+
+// ParsedAttachment 解析后的附件
+type ParsedAttachment struct {
+	Filename    string
+	ContentType string
+	Data        []byte
+}
+
+// parseMIMEMessage 解析 MIME 格式邮件
+func parseMIMEMessage(rawData string) ParsedEmail {
+	result := ParsedEmail{}
+
+	// 分离头部和正文
+	parts := strings.SplitN(rawData, "\r\n\r\n", 2)
+	if len(parts) != 2 {
+		parts = strings.SplitN(rawData, "\n\n", 2)
+	}
+	if len(parts) != 2 {
+		return result
+	}
+
+	headerPart := parts[0]
+	bodyPart := parts[1]
+
+	// 解析头部
+	headers := parseHeaders(headerPart)
+	result.Subject = decodeRFC2047(headers["subject"])
+	result.ContentType = headers["content-type"]
+
+	// 解析正文
+	contentType := strings.ToLower(headers["content-type"])
+	transferEncoding := strings.ToLower(headers["content-transfer-encoding"])
+
+	if strings.HasPrefix(contentType, "multipart/") {
+		// 解析多部分邮件
+		boundary := extractBoundary(contentType)
+		if boundary != "" {
+			parts, attachments := parseMultipart(bodyPart, boundary)
+			result.Body = parts
+			result.Attachments = attachments
+		}
+	} else {
+		// 单部分邮件
+		result.Body = decodeBody(bodyPart, transferEncoding, getCharset(contentType))
+	}
+
+	return result
+}
+
+// parseHeaders 解析邮件头
+func parseHeaders(headerPart string) map[string]string {
+	headers := make(map[string]string)
+	lines := strings.Split(headerPart, "\n")
+
+	var currentKey, currentValue string
+	for _, line := range lines {
+		line = strings.TrimRight(line, "\r")
+		
+		// 折叠行（以空白开头）
+		if len(line) > 0 && (line[0] == ' ' || line[0] == '\t') {
+			currentValue += " " + strings.TrimSpace(line)
+			continue
+		}
+
+		// 保存上一个头部
+		if currentKey != "" {
+			headers[strings.ToLower(currentKey)] = currentValue
+		}
+
+		// 解析新头部
+		idx := strings.Index(line, ":")
+		if idx > 0 {
+			currentKey = line[:idx]
+			currentValue = strings.TrimSpace(line[idx+1:])
+		}
+	}
+
+	// 保存最后一个头部
+	if currentKey != "" {
+		headers[strings.ToLower(currentKey)] = currentValue
+	}
+
+	return headers
+}
+
+// decodeRFC2047 解码 RFC 2047 编码的头部
+func decodeRFC2047(s string) string {
+	decoder := new(mime.WordDecoder)
+	decoded, err := decoder.DecodeHeader(s)
+	if err != nil {
+		return s
+	}
+	return decoded
+}
+
+// extractBoundary 从 Content-Type 中提取 boundary
+func extractBoundary(contentType string) string {
+	_, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return ""
+	}
+	return params["boundary"]
+}
+
+// getCharset 从 Content-Type 中提取字符集
+func getCharset(contentType string) string {
+	_, params, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		return "utf-8"
+	}
+	charset := params["charset"]
+	if charset == "" {
+		return "utf-8"
+	}
+	return strings.ToLower(charset)
+}
+
+// parseMultipart 解析多部分邮件
+func parseMultipart(body, boundary string) (string, []ParsedAttachment) {
+	var textContent string
+	var attachments []ParsedAttachment
+
+	reader := multipart.NewReader(strings.NewReader(body), boundary)
+
+	for {
+		part, err := reader.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			break
+		}
+
+		contentType := part.Header.Get("Content-Type")
+		contentDisp := part.Header.Get("Content-Disposition")
+		transferEncoding := strings.ToLower(part.Header.Get("Content-Transfer-Encoding"))
+
+		data, _ := io.ReadAll(part)
+		decodedData := decodeBodyBytes(data, transferEncoding)
+
+		// 判断是附件还是正文
+		if strings.Contains(contentDisp, "attachment") || strings.Contains(contentDisp, "filename") {
+			filename := extractFilename(contentDisp, contentType)
+			attachments = append(attachments, ParsedAttachment{
+				Filename:    filename,
+				ContentType: contentType,
+				Data:        decodedData,
+			})
+		} else if strings.HasPrefix(strings.ToLower(contentType), "text/") {
+			charset := getCharset(contentType)
+			textContent += decodeCharset(string(decodedData), charset)
+		} else if strings.HasPrefix(strings.ToLower(contentType), "multipart/") {
+			// 嵌套多部分
+			nestedBoundary := extractBoundary(contentType)
+			if nestedBoundary != "" {
+				nestedText, nestedAtts := parseMultipart(string(data), nestedBoundary)
+				textContent += nestedText
+				attachments = append(attachments, nestedAtts...)
+			}
+		}
+	}
+
+	return textContent, attachments
+}
+
+// extractFilename 从 Content-Disposition 或 Content-Type 提取文件名
+func extractFilename(contentDisp, contentType string) string {
+	// 尝试从 Content-Disposition 提取
+	_, params, err := mime.ParseMediaType(contentDisp)
+	if err == nil {
+		if name := params["filename"]; name != "" {
+			return decodeRFC2047(name)
+		}
+	}
+
+	// 尝试从 Content-Type 提取
+	_, params, err = mime.ParseMediaType(contentType)
+	if err == nil {
+		if name := params["name"]; name != "" {
+			return decodeRFC2047(name)
+		}
+	}
+
+	return "attachment"
+}
+
+// decodeBody 解码正文
+func decodeBody(body, encoding, charset string) string {
+	decoded := decodeBodyBytes([]byte(body), encoding)
+	return decodeCharset(string(decoded), charset)
+}
+
+// decodeBodyBytes 解码传输编码
+func decodeBodyBytes(data []byte, encoding string) []byte {
+	switch encoding {
+	case "base64":
+		decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(data)))
+		if err != nil {
+			return data
+		}
+		return decoded
+	case "quoted-printable":
+		reader := quotedprintable.NewReader(bytes.NewReader(data))
+		decoded, err := io.ReadAll(reader)
+		if err != nil {
+			return data
+		}
+		return decoded
+	default:
+		return data
+	}
+}
+
+// decodeCharset 解码字符集
+func decodeCharset(s, charset string) string {
+	switch strings.ToLower(charset) {
+	case "gb2312", "gbk", "gb18030":
+		decoded, err := simplifiedchinese.GBK.NewDecoder().String(s)
+		if err != nil {
+			return s
+		}
+		return decoded
+	case "iso-8859-1", "latin1":
+		decoded, err := charmap.ISO8859_1.NewDecoder().String(s)
+		if err != nil {
+			return s
+		}
+		return decoded
+	case "windows-1252":
+		decoded, err := charmap.Windows1252.NewDecoder().String(s)
+		if err != nil {
+			return s
+		}
+		return decoded
+	default:
+		return s
+	}
+}
+
+// saveInboxAttachment 保存收件箱附件
+func saveInboxAttachment(inboxID uint, att ParsedAttachment) {
+	if len(att.Data) == 0 {
+		return
+	}
+
+	// 创建存储目录
+	saveDir := "data/inbox_attachments"
+	os.MkdirAll(saveDir, 0755)
+
+	// 生成安全文件名
+	ext := filepath.Ext(att.Filename)
+	if ext == "" {
+		ext = ".dat"
+	}
+	newFilename := fmt.Sprintf("%d_%d%s", inboxID, time.Now().UnixNano(), ext)
+	localPath := filepath.Join(saveDir, newFilename)
+
+	if err := os.WriteFile(localPath, att.Data, 0644); err != nil {
+		log.Printf("[Receiver] Failed to save attachment: %v", err)
+		return
+	}
+
+	// 记录到数据库
+	dbFile := database.AttachmentFile{
+		Filename:    att.Filename,
+		FilePath:    localPath,
+		FileSize:    int64(len(att.Data)),
+		ContentType: att.ContentType,
+		Source:      "inbox",
+		RelatedTo:   fmt.Sprintf("inbox:%d", inboxID),
+	}
+	database.DB.Create(&dbFile)
+}
+
 // findForwardRule 查找匹配的转发规则
 func findForwardRule(email string) (*database.ForwardRule, *database.Domain) {
 	parts := strings.Split(email, "@")
@@ -280,13 +799,11 @@ func findForwardRule(email string) (*database.ForwardRule, *database.Domain) {
 	localPart := strings.ToLower(parts[0])
 	domainName := strings.ToLower(parts[1])
 
-	// 查找域名
 	var domain database.Domain
 	if err := database.DB.Where("LOWER(name) = ?", domainName).First(&domain).Error; err != nil {
 		return nil, nil
 	}
 
-	// 查找规则 (按优先级: exact > prefix > all)
 	var rules []database.ForwardRule
 	database.DB.Where("domain_id = ? AND enabled = ?", domain.ID, true).Find(&rules)
 
@@ -317,52 +834,20 @@ func findForwardRule(email string) (*database.ForwardRule, *database.Domain) {
 // extractEmail 从 SMTP 命令中提取邮箱地址
 func extractEmail(s string) string {
 	s = strings.TrimSpace(s)
-	// 去掉 < > 包裹
 	if strings.HasPrefix(s, "<") && strings.HasSuffix(s, ">") {
 		s = s[1 : len(s)-1]
 	}
-	// 处理可能的参数 (SIZE=xxx)
 	if idx := strings.Index(s, " "); idx > 0 {
 		s = s[:idx]
 	}
-	// 验证基本格式
 	if !strings.Contains(s, "@") {
 		return ""
 	}
 	return strings.ToLower(s)
 }
 
-// extractHeader 从原始邮件中提取头部字段
-func extractHeader(rawData, header string) string {
-	lines := strings.Split(rawData, "\n")
-	headerLower := strings.ToLower(header + ":")
-	
-	for i, line := range lines {
-		if strings.HasPrefix(strings.ToLower(line), headerLower) {
-			value := strings.TrimSpace(line[len(header)+1:])
-			// 处理多行头部 (folding)
-			for j := i + 1; j < len(lines); j++ {
-				next := lines[j]
-				if len(next) > 0 && (next[0] == ' ' || next[0] == '\t') {
-					value += " " + strings.TrimSpace(next)
-				} else {
-					break
-				}
-			}
-			return value
-		}
-		// 遇到空行表示头部结束
-		if strings.TrimSpace(line) == "" {
-			break
-		}
-	}
-	return ""
-}
-
 // formatForwardBody 格式化转发邮件正文
-func formatForwardBody(from, originalTo, rawData string) string {
-	body := extractBody(rawData)
-
+func formatForwardBody(from, originalTo, body string) string {
 	return fmt.Sprintf(`<div style="background:#f5f5f5; padding:15px; margin-bottom:20px; border-left:4px solid #2563eb; font-size:14px; color:#666;">
 <p><strong>📧 转发邮件</strong></p>
 <p>原始发件人: %s<br>
@@ -373,7 +858,7 @@ func formatForwardBody(from, originalTo, rawData string) string {
 </div>`, from, originalTo, body)
 }
 
-// isValidPort 验证端口号是否为纯数字 (防止命令注入)
+// isValidPort 验证端口号是否为纯数字
 func isValidPort(port string) bool {
 	if port == "" {
 		return false
@@ -387,7 +872,6 @@ func isValidPort(port string) bool {
 }
 
 func checkPortOccupancy(port string) {
-	// 验证端口号格式
 	if !isValidPort(port) {
 		log.Printf("[Receiver] Invalid port number: %s", port)
 		return
@@ -395,7 +879,6 @@ func checkPortOccupancy(port string) {
 
 	log.Printf("[Receiver] Checking port %s usage...", port)
 	if runtime.GOOS == "windows" {
-		// 直接调用 netstat 并在 Go 中过滤输出
 		cmd := exec.Command("netstat", "-ano")
 		out, err := cmd.Output()
 		if err != nil {
@@ -403,7 +886,6 @@ func checkPortOccupancy(port string) {
 			return
 		}
 		
-		// 在 Go 中过滤包含端口的行
 		lines := strings.Split(string(out), "\n")
 		targetPort := ":" + port
 		var matchedLines []string
@@ -415,7 +897,6 @@ func checkPortOccupancy(port string) {
 		
 		if len(matchedLines) > 0 {
 			log.Printf("[Receiver] Port occupied details:\n%s", strings.Join(matchedLines, "\n"))
-			log.Println("[Receiver] Tip: Use 'tasklist /FI \"PID eq <PID>\"' to find the process name.")
 		}
 	} else {
 		cmd := exec.Command("lsof", "-i", ":"+port)
@@ -426,19 +907,10 @@ func checkPortOccupancy(port string) {
 	}
 }
 
-func formatInboxBody(rawData string) string {
-	return extractBody(rawData)
-}
-
-// extractBody 简单提取邮件正文
-func extractBody(rawData string) string {
-	parts := strings.SplitN(rawData, "\r\n\r\n", 2)
-	if len(parts) == 2 {
-		return parts[1]
-	}
-	parts = strings.SplitN(rawData, "\n\n", 2)
-	if len(parts) == 2 {
-		return parts[1]
-	}
-	return ""
+// ReloadConfig 重新加载配置（供外部调用）
+func ReloadConfig() {
+	rateLimiter = NewRateLimiter(config.AppConfig.ReceiverRateLimit)
+	updateBlacklist()
+	tlsConfig = loadTLSConfig()
+	log.Println("[Receiver] Configuration reloaded")
 }

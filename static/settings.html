@@ -153,20 +153,38 @@
                             <li data-i18n="settings.recv.req_3">Linux 下监听 25 端口需要 root 权限或使用 <code class="bg-yellow-100 px-1 rounded">setcap</code></li>
                         </ul>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="settings.recv.port_label">监听端口</label>
-                        <div class="flex space-x-2">
-                            <input type="text" id="receiver_port" class="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 bg-white" placeholder="25">
-                            <button type="button" onclick="testPort()" class="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 text-sm font-medium whitespace-nowrap" data-i18n="settings.recv.test_btn">检测占用</button>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="settings.recv.port_label">监听端口</label>
+                            <div class="flex space-x-2">
+                                <input type="text" id="receiver_port" class="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 bg-white" placeholder="25">
+                                <button type="button" onclick="testPort()" class="px-3 py-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 text-sm font-medium whitespace-nowrap" data-i18n="settings.recv.test_btn">检测</button>
+                            </div>
                         </div>
-                        <p class="text-xs text-gray-400 mt-1" data-i18n="settings.recv.port_hint">SMTP 标准端口为 25，也可使用其他端口如 2525</p>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="settings.recv.rate_limit">速率限制 (连接/分钟)</label>
+                            <input type="number" id="receiver_rate_limit" min="0" max="1000" class="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 bg-white" placeholder="30">
+                        </div>
                     </div>
-                    <div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="settings.recv.max_size">最大邮件大小 (KB)</label>
+                            <input type="number" id="receiver_max_msg_size" min="100" max="102400" class="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 bg-white" placeholder="10240">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="settings.recv.blacklist">IP 黑名单</label>
+                            <input type="text" id="receiver_blacklist" class="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 bg-white" placeholder="1.2.3.4, 5.6.7.8">
+                        </div>
+                    </div>
+                    <div class="space-y-2">
                         <label class="flex items-center cursor-pointer">
                             <input type="checkbox" id="receiver_tls" class="form-checkbox h-4 w-4 text-indigo-600 rounded transition">
                             <span class="ml-2 text-sm text-gray-700" data-i18n="settings.recv.tls_enable">启用 STARTTLS (推荐)</span>
                         </label>
-                        <p class="text-xs text-gray-400 mt-1 ml-6" data-i18n="settings.recv.tls_hint">需要配置 SSL 证书（使用上方 Web 服务的证书）</p>
+                        <label class="flex items-center cursor-pointer">
+                            <input type="checkbox" id="receiver_require_tls" class="form-checkbox h-4 w-4 text-indigo-600 rounded transition">
+                            <span class="ml-2 text-sm text-gray-700" data-i18n="settings.recv.require_tls">强制 TLS (拒绝明文连接)</span>
+                        </label>
                     </div>
                 </div>
 
@@ -332,6 +350,10 @@
                 document.getElementById('enable_receiver').checked = cfg.enable_receiver || false;
                 document.getElementById('receiver_port').value = cfg.receiver_port || '25';
                 document.getElementById('receiver_tls').checked = cfg.receiver_tls || false;
+                document.getElementById('receiver_rate_limit').value = cfg.receiver_rate_limit || 30;
+                document.getElementById('receiver_max_msg_size').value = cfg.receiver_max_msg_size || 10240;
+                document.getElementById('receiver_blacklist').value = cfg.receiver_blacklist || '';
+                document.getElementById('receiver_require_tls').checked = cfg.receiver_require_tls || false;
                 
                 toggleSSL();
                 toggleReceiver();
@@ -348,13 +370,17 @@
                 dkim_selector: document.getElementById('dkim_selector').value,
                 host: document.getElementById('host').value,
                 port: document.getElementById('port').value,
-                base_url: document.getElementById('base_url').value, // 保存 BaseURL
+                base_url: document.getElementById('base_url').value,
                 enable_ssl: document.getElementById('enable_ssl').checked,
                 cert_file: document.getElementById('cert_file').value,
                 key_file: document.getElementById('key_file').value,
                 enable_receiver: document.getElementById('enable_receiver').checked,
                 receiver_port: document.getElementById('receiver_port').value,
-                receiver_tls: document.getElementById('receiver_tls').checked
+                receiver_tls: document.getElementById('receiver_tls').checked,
+                receiver_rate_limit: parseInt(document.getElementById('receiver_rate_limit').value) || 30,
+                receiver_max_msg_size: parseInt(document.getElementById('receiver_max_msg_size').value) || 10240,
+                receiver_blacklist: document.getElementById('receiver_blacklist').value,
+                receiver_require_tls: document.getElementById('receiver_require_tls').checked
             };
 
             try {

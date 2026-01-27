@@ -174,8 +174,16 @@ func main() {
 
 			// 收件箱
 			authorized.GET("/inbox", api.ListInboxHandler)
+			authorized.GET("/inbox/stats", api.GetInboxStatsHandler)
 			authorized.GET("/inbox/:id", api.GetInboxItemHandler)
+			authorized.GET("/inbox/:id/attachments", api.GetInboxAttachmentsHandler)
 			authorized.DELETE("/inbox/:id", api.DeleteInboxItemHandler)
+			authorized.POST("/inbox/batch/read", api.BatchMarkReadHandler)
+			authorized.POST("/inbox/batch/delete", api.BatchDeleteHandler)
+
+			// 收件配置
+			authorized.GET("/receiver/config", api.GetReceiverConfigHandler)
+			authorized.PUT("/receiver/config", api.UpdateReceiverConfigHandler)
 		}
 	}
 

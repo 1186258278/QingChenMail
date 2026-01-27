@@ -10,7 +10,7 @@ import (
 	"os"
 )
 
-const Version = "v1.0.7"
+const Version = "v1.0.8"
 
 type Config struct {
 	Domain         string `json:"domain"`
@@ -29,6 +29,15 @@ type Config struct {
 	EnableReceiver bool   `json:"enable_receiver"` // 是否启用接收服务
 	ReceiverPort   string `json:"receiver_port"`   // SMTP 接收端口，默认 25
 	ReceiverTLS    bool   `json:"receiver_tls"`    // 是否启用 STARTTLS
+	ReceiverTLSCert string `json:"receiver_tls_cert"` // STARTTLS 证书路径
+	ReceiverTLSKey  string `json:"receiver_tls_key"`  // STARTTLS 私钥路径
+
+	// 收件安全配置
+	ReceiverRateLimit    int  `json:"receiver_rate_limit"`     // 每 IP 每分钟最大连接数，0 表示不限制
+	ReceiverMaxMsgSize   int  `json:"receiver_max_msg_size"`   // 最大邮件大小 (KB)，默认 10240 (10MB)
+	ReceiverSpamFilter   bool `json:"receiver_spam_filter"`    // 是否启用垃圾邮件过滤
+	ReceiverBlacklist    string `json:"receiver_blacklist"`    // IP 黑名单，逗号分隔
+	ReceiverRequireTLS   bool `json:"receiver_require_tls"`    // 是否强制要求 TLS
 
 	JWTSecret      string `json:"jwt_secret"`
 }
@@ -93,7 +102,16 @@ func LoadConfig() {
 	// 3. 接收端口 (如果为空，说明是旧配置，补全默认值)
 	if AppConfig.ReceiverPort == "" {
 		AppConfig.ReceiverPort = "2525"
-		// 注意：我们不强制开启 EnableReceiver，让用户自己决定，但我们把端口写进去方便修改
+		needsSave = true
+	}
+
+	// 4. 收件安全默认值
+	if AppConfig.ReceiverRateLimit == 0 {
+		AppConfig.ReceiverRateLimit = 30 // 每 IP 每分钟 30 个连接
+		needsSave = true
+	}
+	if AppConfig.ReceiverMaxMsgSize == 0 {
+		AppConfig.ReceiverMaxMsgSize = 10240 // 10MB
 		needsSave = true
 	}
 

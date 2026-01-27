@@ -5,5 +5,9 @@
     "inbox.no_subject": "(No Subject)",
     "inbox.from": "From:",
     "inbox.to": "To:",
-    "inbox.select_msg": "Select a message to view details"
+    "inbox.select_msg": "Select a message to view details",
+    "inbox.select_all": "Select All",
+    "inbox.select_first": "Please select messages first",
+    "inbox.batch_delete_confirm": "Are you sure you want to delete {count} selected messages?",
+    "inbox.unread": "unread"
 }

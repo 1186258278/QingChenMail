@@ -12,7 +12,10 @@
     <div class="mb-8 flex justify-between items-center">
         <div>
             <h2 class="text-3xl font-bold text-gray-800" data-i18n="inbox.title">收件箱</h2>
-            <p class="text-gray-500 mt-1" data-i18n="inbox.subtitle">查看接收到的回复邮件</p>
+            <p class="text-gray-500 mt-1">
+                <span data-i18n="inbox.subtitle">查看接收到的回复邮件</span>
+                <span id="inbox-stats" class="ml-2 text-sm"></span>
+            </p>
         </div>
         <div class="flex space-x-2">
             <input type="text" id="search-input" placeholder="搜索主题或发件人..." class="border rounded-lg px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500 text-sm w-64" onkeyup="if(event.key==='Enter') loadInbox()">
@@ -25,6 +28,20 @@
     <div class="flex h-[calc(100vh-200px)] gap-6">
         <!-- 邮件列表 -->
         <div class="w-1/3 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col">
+            <!-- 批量操作工具栏 -->
+            <div class="p-3 border-b border-gray-100 flex items-center space-x-2 bg-gray-50 rounded-t-xl">
+                <label class="flex items-center cursor-pointer">
+                    <input type="checkbox" id="select-all" onchange="toggleSelectAll()" class="form-checkbox h-4 w-4 text-blue-600 rounded">
+                    <span class="ml-2 text-xs text-gray-500" data-i18n="inbox.select_all">全选</span>
+                </label>
+                <div class="flex-1"></div>
+                <button onclick="batchMarkRead()" class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 transition" title="标记已读">
+                    <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                </button>
+                <button onclick="batchDelete()" class="text-xs bg-red-50 text-red-600 px-2 py-1 rounded hover:bg-red-100 transition" title="删除">
+                    <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                </button>
+            </div>
             <div id="inbox-list" class="flex-1 overflow-y-auto divide-y divide-gray-100">
                 <!-- 动态生成 -->
             </div>
@@ -101,20 +118,25 @@
                         const div = document.createElement('div');
                         div.className = `p-4 hover:bg-blue-50 cursor-pointer transition relative group ${msg.id === currentMsgId ? 'bg-blue-50 border-l-4 border-blue-500 pl-3' : 'border-l-4 border-transparent pl-3'}`;
                         if (!msg.is_read) div.classList.add('font-medium');
+                        div.dataset.id = msg.id;
                         
-                        div.onclick = () => loadMessage(msg.id);
                         // 安全修复：转义用户输入防止 XSS
                         const safeFrom = Utils.escapeHtml(msg.from_addr || '');
                         const safeSubject = Utils.escapeHtml(msg.subject || '') || I18n.t('inbox.no_subject');
                         const safeTo = Utils.escapeHtml(msg.to_addr || '');
                         div.innerHTML = `
-                            <div class="flex justify-between mb-1">
-                                <span class="text-sm text-gray-800 truncate w-2/3" title="${safeFrom}">${safeFrom}</span>
-                                <span class="text-xs text-gray-400 whitespace-nowrap">${formatDate(msg.created_at)}</span>
+                            <div class="flex items-start">
+                                <input type="checkbox" class="msg-checkbox form-checkbox h-4 w-4 text-blue-600 rounded mt-1 mr-3 flex-shrink-0" data-id="${msg.id}" onclick="event.stopPropagation(); updateSelectAll()">
+                                <div class="flex-1 min-w-0" onclick="loadMessage(${msg.id})">
+                                    <div class="flex justify-between mb-1">
+                                        <span class="text-sm text-gray-800 truncate" title="${safeFrom}">${safeFrom}</span>
+                                        <span class="text-xs text-gray-400 whitespace-nowrap ml-2">${formatDate(msg.created_at)}</span>
+                                    </div>
+                                    <h4 class="text-sm text-gray-600 truncate mb-1">${safeSubject}</h4>
+                                    <p class="text-xs text-gray-400 truncate">To: ${safeTo}</p>
+                                </div>
                             </div>
-                            <h4 class="text-sm text-gray-600 truncate mb-1">${safeSubject}</h4>
-                            <p class="text-xs text-gray-400 truncate">To: ${safeTo}</p>
-                            ${!msg.is_read ? '<span class="absolute top-4 right-4 w-2 h-2 bg-blue-600 rounded-full"></span>' : ''}
+                            ${!msg.is_read ? '<span class="absolute top-4 right-12 w-2 h-2 bg-blue-600 rounded-full"></span>' : ''}
                         `;
                         container.appendChild(div);
                     });
@@ -196,11 +218,97 @@
             return date.toLocaleDateString([], { month: 'numeric', day: 'numeric' });
         }
 
+        // 获取选中的邮件 ID
+        function getSelectedIds() {
+            const checkboxes = document.querySelectorAll('.msg-checkbox:checked');
+            return Array.from(checkboxes).map(cb => parseInt(cb.dataset.id));
+        }
+
+        // 全选/取消全选
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('select-all').checked;
+            document.querySelectorAll('.msg-checkbox').forEach(cb => {
+                cb.checked = selectAll;
+            });
+        }
+
+        // 更新全选状态
+        function updateSelectAll() {
+            const total = document.querySelectorAll('.msg-checkbox').length;
+            const checked = document.querySelectorAll('.msg-checkbox:checked').length;
+            document.getElementById('select-all').checked = total > 0 && total === checked;
+            document.getElementById('select-all').indeterminate = checked > 0 && checked < total;
+        }
+
+        // 批量标记已读
+        async function batchMarkRead() {
+            const ids = getSelectedIds();
+            if (ids.length === 0) {
+                showToast(I18n.t('inbox.select_first'), 'error');
+                return;
+            }
+            try {
+                const res = await request('/inbox/batch/read', {
+                    method: 'POST',
+                    body: JSON.stringify({ ids: ids })
+                });
+                showToast(res.message);
+                loadInbox();
+                loadStats();
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        // 批量删除
+        async function batchDelete() {
+            const ids = getSelectedIds();
+            if (ids.length === 0) {
+                showToast(I18n.t('inbox.select_first'), 'error');
+                return;
+            }
+            if (!confirm(I18n.t('inbox.batch_delete_confirm', { count: ids.length }))) return;
+            try {
+                const res = await request('/inbox/batch/delete', {
+                    method: 'POST',
+                    body: JSON.stringify({ ids: ids })
+                });
+                showToast(res.message);
+                // 如果当前查看的邮件被删除，重置
+                if (ids.includes(currentMsgId)) {
+                    currentMsgId = null;
+                    document.getElementById('empty-state').classList.remove('hidden');
+                    document.getElementById('message-content').classList.add('hidden');
+                }
+                loadInbox();
+                loadStats();
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        // 加载统计信息
+        async function loadStats() {
+            try {
+                const stats = await request('/inbox/stats');
+                const statsEl = document.getElementById('inbox-stats');
+                if (stats.unread > 0) {
+                    statsEl.innerHTML = `<span class="bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">${stats.unread} ${I18n.t('inbox.unread')}</span>`;
+                } else {
+                    statsEl.innerHTML = '';
+                }
+            } catch (e) {}
+        }
+
         // 等待 I18n 就绪后再初始化页面，否则 I18n.t 可能返回空
         if (typeof I18n !== 'undefined' && I18n.isReady) {
             init();
+            loadStats();
         } else {
-            document.addEventListener('i18n-ready', init);
+            document.addEventListener('i18n-ready', () => {
+                init();
+                loadStats();
+            });
         }
     </script>
 </body>
