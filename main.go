@@ -153,8 +153,11 @@ func main() {
 
 			authorized.GET("/contacts", api.ListContactsHandler)
 			authorized.POST("/contacts", api.CreateContactHandler)
-			authorized.POST("/contacts/import", api.ImportContactsHandler)
+			authorized.PUT("/contacts/:id", api.UpdateContactHandler)
 			authorized.DELETE("/contacts/:id", api.DeleteContactHandler)
+			authorized.POST("/contacts/import", api.ImportContactsHandler)
+			authorized.GET("/contacts/export", api.ExportContactsHandler)
+			authorized.POST("/contacts/batch_delete", api.BatchDeleteContactsHandler)
 
 			// 营销活动管理
 			authorized.GET("/campaigns", api.ListCampaignsHandler)
@@ -162,6 +165,7 @@ func main() {
 			authorized.PUT("/campaigns/:id", api.UpdateCampaignHandler)
 			authorized.DELETE("/campaigns/:id", api.DeleteCampaignHandler)
 			authorized.POST("/campaigns/:id/start", api.StartCampaignHandler)
+			authorized.POST("/campaigns/:id/test", api.TestCampaignHandler)
 
 			// 收件箱
 			authorized.GET("/inbox", api.ListInboxHandler)

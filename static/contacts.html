@@ -48,9 +48,17 @@
                             onkeydown="if(event.key==='Enter') loadContacts()">
                         <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
                     </div>
+                    <button onclick="exportContacts()" class="bg-white border border-gray-300 text-gray-700 px-4 py-1.5 rounded-lg hover:bg-gray-50 transition text-sm flex items-center shadow-sm">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        <span data-i18n="contacts.action.export">导出</span>
+                    </button>
                     <button onclick="openImportModal()" class="bg-white border border-gray-300 text-gray-700 px-4 py-1.5 rounded-lg hover:bg-gray-50 transition text-sm flex items-center shadow-sm">
                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
                         <span data-i18n="contacts.action.import">导入</span>
+                    </button>
+                    <button onclick="batchDeleteContacts()" id="batch-delete-btn" class="hidden bg-red-500 text-white px-4 py-1.5 rounded-lg hover:bg-red-600 transition text-sm flex items-center shadow-sm">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        <span data-i18n="contacts.action.batch_delete">批量删除</span>
                     </button>
                     <button onclick="openContactModal()" class="bg-blue-600 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700 transition text-sm flex items-center shadow-sm">
                         <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
@@ -64,6 +72,9 @@
                 <table class="w-full text-left border-collapse">
                     <thead class="bg-gray-50 sticky top-0 z-10">
                         <tr>
+                            <th class="p-4 w-10">
+                                <input type="checkbox" id="select-all" onchange="toggleSelectAll()" class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                            </th>
                             <th class="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider" data-i18n="contacts.table.email">邮箱</th>
                             <th class="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider" data-i18n="contacts.table.name">姓名</th>
                             <th class="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider" data-i18n="contacts.table.status">状态</th>
@@ -115,15 +126,24 @@
     <!-- 联系人模态框 -->
     <div id="contact-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center backdrop-blur-sm">
         <div class="bg-white rounded-xl p-6 w-[400px] shadow-2xl">
-            <h3 class="font-bold text-xl mb-4 text-gray-800" data-i18n="contacts.modal.add_title">添加联系人</h3>
+            <h3 id="contact-modal-title" class="font-bold text-xl mb-4 text-gray-800" data-i18n="contacts.modal.add_title">添加联系人</h3>
             <form onsubmit="saveContact(event)">
+                <input type="hidden" id="contact-id">
                 <div class="mb-4">
                     <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="contacts.table.email">邮箱</label>
                     <input type="email" id="contact-email" required class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
                 </div>
-                <div class="mb-6">
+                <div class="mb-4">
                     <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="contacts.table.name">姓名</label>
                     <input type="text" id="contact-name" class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div class="mb-6" id="contact-status-row" style="display:none;">
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="contacts.table.status">状态</label>
+                    <select id="contact-status" class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="active">Active</option>
+                        <option value="unsubscribed">Unsubscribed</option>
+                        <option value="bounced">Bounced</option>
+                    </select>
                 </div>
                 <div class="flex justify-end space-x-3">
                     <button type="button" onclick="closeContactModal()" class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg" data-i18n="common.cancel">取消</button>
@@ -308,7 +328,7 @@
                 tbody.innerHTML = '';
 
                 if (res.data.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="4" class="text-center py-8 text-gray-400" data-i18n="common.no_data">无数据</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-gray-400" data-i18n="common.no_data">无数据</td></tr>`;
                 } else {
                     res.data.forEach(c => {
                         const tr = document.createElement('tr');
@@ -317,11 +337,17 @@
                         const safeEmail = Utils.escapeHtml(c.email);
                         const safeName = Utils.escapeHtml(c.name || '-');
                         const safeStatus = Utils.escapeHtml(c.status);
+                        const statusColor = c.status === 'active' ? 'bg-green-100 text-green-700' : 
+                                           c.status === 'unsubscribed' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-700';
                         tr.innerHTML = `
+                            <td class="p-4">
+                                <input type="checkbox" class="contact-checkbox w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" data-id="${c.id}" onchange="updateBatchDeleteBtn()">
+                            </td>
                             <td class="p-4 font-mono text-sm text-gray-700">${safeEmail}</td>
                             <td class="p-4 text-sm text-gray-600">${safeName}</td>
-                            <td class="p-4"><span class="px-2 py-0.5 rounded text-xs bg-green-100 text-green-700">${safeStatus}</span></td>
-                            <td class="p-4 text-right">
+                            <td class="p-4"><span class="px-2 py-0.5 rounded text-xs ${statusColor}">${safeStatus}</span></td>
+                            <td class="p-4 text-right space-x-2">
+                                <button onclick="editContact(${c.id})" class="text-blue-500 hover:text-blue-700 text-sm" data-i18n="common.edit">编辑</button>
                                 <button onclick="deleteContact(${c.id})" class="text-red-500 hover:text-red-700 text-sm" data-i18n="common.delete">删除</button>
                             </td>
                         `;
@@ -357,34 +383,111 @@
             loadContacts();
         }
 
-        function openContactModal() {
+        function openContactModal(isEdit = false) {
             if (!currentGroupId) {
                 showToast(I18n.t('contacts.groups.select_hint'), 'error');
                 return;
             }
             document.getElementById('contact-modal').classList.remove('hidden');
+            document.getElementById('contact-id').value = '';
             document.getElementById('contact-email').value = '';
             document.getElementById('contact-name').value = '';
+            document.getElementById('contact-status').value = 'active';
+            document.getElementById('contact-status-row').style.display = isEdit ? 'block' : 'none';
+            document.getElementById('contact-modal-title').textContent = isEdit ? 
+                I18n.t('contacts.modal.edit_title') || '编辑联系人' : 
+                I18n.t('contacts.modal.add_title') || '添加联系人';
         }
 
         function closeContactModal() {
             document.getElementById('contact-modal').classList.add('hidden');
         }
 
+        async function editContact(id) {
+            try {
+                const res = await request(`/contacts?group_id=${currentGroupId}&page=1&page_size=1000`);
+                const contact = res.data.find(c => c.id === id);
+                if (!contact) return;
+                
+                openContactModal(true);
+                document.getElementById('contact-id').value = id;
+                document.getElementById('contact-email').value = contact.email;
+                document.getElementById('contact-name').value = contact.name || '';
+                document.getElementById('contact-status').value = contact.status;
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
         async function saveContact(e) {
             e.preventDefault();
+            const id = document.getElementById('contact-id').value;
             const data = {
-                group_id: currentGroupId,
                 email: document.getElementById('contact-email').value,
                 name: document.getElementById('contact-name').value
             };
 
             try {
-                await request('/contacts', { method: 'POST', body: JSON.stringify(data) });
+                if (id) {
+                    // 编辑模式
+                    data.status = document.getElementById('contact-status').value;
+                    await request(`/contacts/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+                } else {
+                    // 新建模式
+                    data.group_id = currentGroupId;
+                    await request('/contacts', { method: 'POST', body: JSON.stringify(data) });
+                }
                 closeContactModal();
                 loadContacts();
-                loadGroups(); // update count
+                loadGroups();
                 showToast(I18n.t('common.success'));
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        // 导出联系人
+        function exportContacts() {
+            if (!currentGroupId) {
+                showToast(I18n.t('contacts.groups.select_hint'), 'error');
+                return;
+            }
+            window.location.href = `/api/v1/contacts/export?group_id=${currentGroupId}`;
+        }
+
+        // 批量选择相关
+        function toggleSelectAll() {
+            const selectAll = document.getElementById('select-all').checked;
+            document.querySelectorAll('.contact-checkbox').forEach(cb => cb.checked = selectAll);
+            updateBatchDeleteBtn();
+        }
+
+        function updateBatchDeleteBtn() {
+            const selected = document.querySelectorAll('.contact-checkbox:checked').length;
+            const btn = document.getElementById('batch-delete-btn');
+            if (selected > 0) {
+                btn.classList.remove('hidden');
+                btn.querySelector('span').textContent = `${I18n.t('contacts.action.batch_delete') || '批量删除'} (${selected})`;
+            } else {
+                btn.classList.add('hidden');
+            }
+        }
+
+        async function batchDeleteContacts() {
+            const ids = Array.from(document.querySelectorAll('.contact-checkbox:checked')).map(cb => parseInt(cb.dataset.id));
+            if (ids.length === 0) return;
+            
+            if (!confirm(I18n.t('contacts.alert.batch_delete') || `确定要删除选中的 ${ids.length} 个联系人吗？`)) return;
+            
+            try {
+                const res = await request('/contacts/batch_delete', { 
+                    method: 'POST', 
+                    body: JSON.stringify({ ids }) 
+                });
+                showToast(res.message);
+                document.getElementById('select-all').checked = false;
+                loadContacts();
+                loadGroups();
             } catch (e) {
                 showToast(e.message, 'error');
             }

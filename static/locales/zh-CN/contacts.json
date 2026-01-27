@@ -12,9 +12,13 @@
     "contacts.table.name": "姓名",
     "contacts.table.status": "状态",
     "contacts.modal.add_title": "添加联系人",
+    "contacts.modal.edit_title": "编辑联系人",
     "contacts.import.title": "批量导入",
     "contacts.import.hint": "格式：每行一个，\"邮箱,姓名\"。例如：test@example.com,张三",
     "contacts.action.add": "添加联系人",
     "contacts.action.import": "导入",
-    "contacts.alert.delete_group": "确定要删除该分组吗？组内必须没有联系人才能删除。"
+    "contacts.action.export": "导出",
+    "contacts.action.batch_delete": "批量删除",
+    "contacts.alert.delete_group": "确定要删除该分组吗？组内必须没有联系人才能删除。",
+    "contacts.alert.batch_delete": "确定要删除选中的联系人吗？"
 }

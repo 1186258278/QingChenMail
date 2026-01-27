@@ -99,23 +99,35 @@ func processQueue() {
 				// 失败处理
 				newRetries := t.Retries + 1
 				status := "failed"
+				isFinalFailure := false
 				if newRetries >= MaxRetries {
 					// 超过重试次数，永久失败
-					status = "dead" // 或者 keep as failed but max retries reached
+					status = "dead"
+					isFinalFailure = true
 				}
 				
 				database.DB.Model(&t).Updates(map[string]interface{}{
 					"status":     status,
 					"retries":    newRetries,
-					"next_retry": time.Now().Add(RetryInterval * time.Duration(newRetries)), // 指数退避示例
+					"next_retry": time.Now().Add(RetryInterval * time.Duration(newRetries)),
 					"error_msg":  err.Error(),
 				})
+
+				// 只有最终失败（超过重试次数）才计入统计
+				if isFinalFailure && t.CampaignID > 0 {
+					updateCampaignStats(t.CampaignID, false)
+				}
 			} else {
 				// 成功
 				database.DB.Model(&t).Updates(map[string]interface{}{
 					"status":    "completed",
 					"error_msg": "",
 				})
+
+				// 更新 Campaign 统计
+				if t.CampaignID > 0 {
+					updateCampaignStats(t.CampaignID, true)
+				}
 			}
 		}(t)
 	}
@@ -141,6 +153,66 @@ func executeTask(task database.EmailQueue) error {
 	}
 
 	// 调用同步发送逻辑
-	// 注意：SendEmail 内部已经处理了 EmailLog 的写入
 	return SendEmail(req)
+}
+
+// updateCampaignStats 更新营销任务的统计数据
+func updateCampaignStats(campaignID uint, success bool) {
+	if campaignID == 0 {
+		return
+	}
+
+	// 根据发送结果更新对应计数
+	if success {
+		database.DB.Model(&database.Campaign{}).
+			Where("id = ?", campaignID).
+			UpdateColumn("success_count", database.DB.Raw("success_count + 1"))
+	} else {
+		database.DB.Model(&database.Campaign{}).
+			Where("id = ?", campaignID).
+			UpdateColumn("fail_count", database.DB.Raw("fail_count + 1"))
+	}
+
+	// 更新已发送计数
+	database.DB.Model(&database.Campaign{}).
+		Where("id = ?", campaignID).
+		UpdateColumn("sent_count", database.DB.Raw("sent_count + 1"))
+
+	// 检查是否所有邮件都已处理完成
+	checkCampaignCompletion(campaignID)
+}
+
+// checkCampaignCompletion 检查营销任务是否已全部完成
+func checkCampaignCompletion(campaignID uint) {
+	var campaign database.Campaign
+	if err := database.DB.First(&campaign, campaignID).Error; err != nil {
+		return
+	}
+
+	// 只有 processing 状态的任务才需要检查
+	if campaign.Status != "processing" {
+		return
+	}
+
+	// 检查队列中是否还有未完成的任务
+	// 注意：failed 状态如果还有重试机会，不算完成；dead 状态才是最终失败
+	var pendingCount int64
+	database.DB.Model(&database.EmailQueue{}).
+		Where("campaign_id = ? AND status IN ('pending', 'processing')", campaignID).
+		Count(&pendingCount)
+
+	// 检查是否有可重试的失败任务
+	var retryableCount int64
+	database.DB.Model(&database.EmailQueue{}).
+		Where("campaign_id = ? AND status = 'failed' AND retries < ?", campaignID, MaxRetries).
+		Count(&retryableCount)
+
+	// 如果没有待处理和可重试的任务，则标记为完成
+	if pendingCount == 0 && retryableCount == 0 {
+		// 重新获取最新的统计数据
+		database.DB.First(&campaign, campaignID)
+		database.DB.Model(&campaign).Update("status", "completed")
+		log.Printf("[Campaign] Campaign %d completed: total=%d, success=%d, failed=%d",
+			campaignID, campaign.TotalCount, campaign.SuccessCount, campaign.FailCount)
+	}
 }

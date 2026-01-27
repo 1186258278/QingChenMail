@@ -227,6 +227,119 @@ func DeleteContactHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Contact deleted"})
 }
 
+// UpdateContactHandler 更新联系人
+func UpdateContactHandler(c *gin.Context) {
+	id := c.Param("id")
+	var contact database.Contact
+	if err := database.DB.First(&contact, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Contact not found"})
+		return
+	}
+
+	var input struct {
+		Email  string `json:"email"`
+		Name   string `json:"name"`
+		Status string `json:"status"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	// 检查邮箱是否重复（同分组内）
+	if input.Email != "" && input.Email != contact.Email {
+		var exists int64
+		database.DB.Model(&database.Contact{}).
+			Where("group_id = ? AND email = ? AND id != ?", contact.GroupID, input.Email, contact.ID).
+			Count(&exists)
+		if exists > 0 {
+			c.JSON(http.StatusConflict, gin.H{"error": "Email already exists in this group"})
+			return
+		}
+		contact.Email = input.Email
+	}
+
+	if input.Name != "" {
+		contact.Name = input.Name
+	}
+	if input.Status != "" {
+		contact.Status = input.Status
+	}
+
+	if err := database.DB.Save(&contact).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update contact"})
+		return
+	}
+	c.JSON(http.StatusOK, contact)
+}
+
+// ExportContactsHandler 导出联系人
+func ExportContactsHandler(c *gin.Context) {
+	groupID := c.Query("group_id")
+	if groupID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "group_id is required"})
+		return
+	}
+
+	var contacts []database.Contact
+	if err := database.DB.Where("group_id = ?", groupID).Find(&contacts).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch contacts"})
+		return
+	}
+
+	// 生成 CSV 内容
+	var builder strings.Builder
+	builder.WriteString("email,name,status\n")
+	for _, contact := range contacts {
+		// CSV 转义：如果包含逗号、引号或换行，需要用引号包裹
+		name := contact.Name
+		if strings.ContainsAny(name, ",\"\n") {
+			name = "\"" + strings.ReplaceAll(name, "\"", "\"\"") + "\""
+		}
+		builder.WriteString(fmt.Sprintf("%s,%s,%s\n", contact.Email, name, contact.Status))
+	}
+
+	// 获取分组名称用于文件名
+	var group database.ContactGroup
+	groupName := "contacts"
+	if err := database.DB.First(&group, groupID).Error; err == nil {
+		groupName = group.Name
+	}
+
+	// 设置响应头
+	filename := fmt.Sprintf("%s_%s.csv", groupName, time.Now().Format("20060102"))
+	c.Header("Content-Type", "text/csv; charset=utf-8")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+	c.String(http.StatusOK, builder.String())
+}
+
+// BatchDeleteContactsHandler 批量删除联系人
+func BatchDeleteContactsHandler(c *gin.Context) {
+	var input struct {
+		IDs []uint `json:"ids"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request"})
+		return
+	}
+
+	if len(input.IDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "No IDs provided"})
+		return
+	}
+
+	result := database.DB.Delete(&database.Contact{}, input.IDs)
+	if result.Error != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete contacts"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("Deleted %d contacts", result.RowsAffected),
+		"count":   result.RowsAffected,
+	})
+}
+
 // =======================
 // Campaign Handlers
 // =======================
@@ -332,4 +445,57 @@ func DeleteCampaignHandler(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Campaign deleted"})
+}
+
+// TestCampaignHandler 发送测试邮件
+func TestCampaignHandler(c *gin.Context) {
+	id := c.Param("id")
+	var campaign database.Campaign
+	if err := database.DB.First(&campaign, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Campaign not found"})
+		return
+	}
+
+	var input struct {
+		TestEmail string `json:"test_email" binding:"required,email"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid test email"})
+		return
+	}
+
+	// 获取发件人配置
+	var smtpConfig database.SMTPConfig
+	if err := database.DB.First(&smtpConfig, campaign.SenderID).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid sender configuration"})
+		return
+	}
+
+	// 替换变量（使用测试数据）
+	body := strings.ReplaceAll(campaign.Body, "{name}", "测试用户")
+	body = strings.ReplaceAll(body, "{email}", input.TestEmail)
+
+	// 添加测试标记
+	subject := "[测试] " + campaign.Subject
+
+	// 直接发送（不经过队列）
+	task := database.EmailQueue{
+		From:      smtpConfig.Username,
+		To:        input.TestEmail,
+		Subject:   subject,
+		Body:      body,
+		ChannelID: smtpConfig.ID,
+		Status:    "pending",
+	}
+
+	// 使用 SendEmail 直接发送
+	if err := database.DB.Create(&task).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to queue test email"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":    "Test email queued",
+		"test_email": input.TestEmail,
+	})
 }

@@ -12,9 +12,13 @@
     "contacts.table.name": "Name",
     "contacts.table.status": "Status",
     "contacts.modal.add_title": "Add Contact",
+    "contacts.modal.edit_title": "Edit Contact",
     "contacts.import.title": "Batch Import",
     "contacts.import.hint": "Format: One per line, \"email,name\". E.g.: test@example.com,John Doe",
     "contacts.action.add": "Add Contact",
     "contacts.action.import": "Import",
-    "contacts.alert.delete_group": "Are you sure? The group must be empty to delete."
+    "contacts.action.export": "Export",
+    "contacts.action.batch_delete": "Delete Selected",
+    "contacts.alert.delete_group": "Are you sure? The group must be empty to delete.",
+    "contacts.alert.batch_delete": "Delete selected contacts?"
 }

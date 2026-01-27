@@ -91,6 +91,25 @@
         </div>
     </div>
 
+    <!-- 测试发送模态框 -->
+    <div id="test-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl p-6 w-[400px] shadow-2xl">
+            <h3 class="font-bold text-xl mb-4 text-gray-800" data-i18n="campaigns.test.title">发送测试邮件</h3>
+            <form onsubmit="sendTestEmail(event)">
+                <input type="hidden" id="test-campaign-id">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="campaigns.test.email">测试邮箱</label>
+                    <input type="email" id="test-email" required placeholder="your@email.com" class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    <p class="text-xs text-gray-500 mt-1" data-i18n="campaigns.test.hint">测试邮件会发送到此邮箱，主题会添加 [测试] 前缀</p>
+                </div>
+                <div class="flex justify-end space-x-3">
+                    <button type="button" onclick="closeTestModal()" class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg" data-i18n="common.cancel">取消</button>
+                    <button type="submit" class="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 shadow-sm" data-i18n="campaigns.test.send">发送测试</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         Auth.check();
 
@@ -193,6 +212,7 @@
                              ` : ''}
                              
                              ${c.status === 'draft' ? `
+                                <button onclick="openTestModal(${c.id})" class="text-green-600 hover:bg-green-50 px-3 py-1.5 rounded transition text-sm font-medium" data-i18n="campaigns.action.test">测试</button>
                                 <button onclick="startCampaign(${c.id})" class="text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded transition text-sm font-medium" data-i18n="campaigns.action.start">启动</button>
                                 <button onclick="editCampaign(${c.id})" class="text-gray-600 hover:bg-gray-100 px-3 py-1.5 rounded transition text-sm" data-i18n="common.edit">编辑</button>
                              ` : ''}
@@ -299,6 +319,34 @@
                 await request(`/campaigns/${id}`, { method: 'DELETE' });
                 loadCampaigns();
                 showToast(I18n.t('common.deleted'));
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        // 测试发送功能
+        function openTestModal(id) {
+            document.getElementById('test-modal').classList.remove('hidden');
+            document.getElementById('test-campaign-id').value = id;
+            document.getElementById('test-email').value = '';
+        }
+
+        function closeTestModal() {
+            document.getElementById('test-modal').classList.add('hidden');
+        }
+
+        async function sendTestEmail(e) {
+            e.preventDefault();
+            const id = document.getElementById('test-campaign-id').value;
+            const testEmail = document.getElementById('test-email').value;
+
+            try {
+                const res = await request(`/campaigns/${id}/test`, {
+                    method: 'POST',
+                    body: JSON.stringify({ test_email: testEmail })
+                });
+                closeTestModal();
+                showToast(I18n.t('campaigns.test.success') || `测试邮件已发送至 ${testEmail}`);
             } catch (e) {
                 showToast(e.message, 'error');
             }

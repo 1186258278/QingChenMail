@@ -11,9 +11,11 @@
     "campaigns.stats.success": "成功",
     "campaigns.stats.failed": "失败",
     "campaigns.stats.opened": "已打开",
+    "campaigns.stats.clicked": "点击",
     "campaigns.stats.unsubscribed": "退订",
     "campaigns.action.create": "创建任务",
     "campaigns.action.start": "启动",
+    "campaigns.action.test": "测试",
     "campaigns.modal.title": "创建营销任务",
     "campaigns.modal.name": "任务名称",
     "campaigns.modal.name_ph": "例如：2026新年促销",
@@ -25,5 +27,10 @@
     "campaigns.modal.scheduled_hint": "留空则为手动启动；若设置了时间，启动后将等待至该时间自动发送。",
     "campaigns.modal.select_template": "选择模板...",
     "campaigns.modal.vars_hint": "支持变量: {name}, {email}",
-    "campaigns.alert.start_confirm": "确定要启动此任务吗？邮件将开始发送。"
+    "campaigns.alert.start_confirm": "确定要启动此任务吗？邮件将开始发送。",
+    "campaigns.test.title": "发送测试邮件",
+    "campaigns.test.email": "测试邮箱",
+    "campaigns.test.hint": "测试邮件会发送到此邮箱，主题会添加 [测试] 前缀",
+    "campaigns.test.send": "发送测试",
+    "campaigns.test.success": "测试邮件已加入发送队列"
 }

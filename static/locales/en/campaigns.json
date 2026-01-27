@@ -11,9 +11,11 @@
     "campaigns.stats.success": "Success",
     "campaigns.stats.failed": "Failed",
     "campaigns.stats.opened": "Opened",
+    "campaigns.stats.clicked": "Clicked",
     "campaigns.stats.unsubscribed": "Unsub",
     "campaigns.action.create": "Create Campaign",
     "campaigns.action.start": "Start",
+    "campaigns.action.test": "Test",
     "campaigns.modal.title": "Create Campaign",
     "campaigns.modal.name": "Campaign Name",
     "campaigns.modal.name_ph": "E.g. New Year Promo 2026",
@@ -25,5 +27,10 @@
     "campaigns.modal.scheduled_hint": "Leave empty for manual start. If set, it will start automatically at the scheduled time.",
     "campaigns.modal.select_template": "Select a template...",
     "campaigns.modal.vars_hint": "Variables: {name}, {email}",
-    "campaigns.alert.start_confirm": "Start this campaign? Emails will be queued immediately."
+    "campaigns.alert.start_confirm": "Start this campaign? Emails will be queued immediately.",
+    "campaigns.test.title": "Send Test Email",
+    "campaigns.test.email": "Test Email Address",
+    "campaigns.test.hint": "Test email will be sent to this address with [Test] prefix in subject",
+    "campaigns.test.send": "Send Test",
+    "campaigns.test.success": "Test email queued"
 }
