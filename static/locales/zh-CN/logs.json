@@ -23,5 +23,6 @@
     "logs.alert.resend_confirm": "确定要重新发送这封邮件吗？",
     "logs.toast.not_found": "日志记录不存在",
     "logs.toast.queued": "已加入发送队列",
-    "logs.toast.resend_fail": "重发失败"
+    "logs.toast.resend_fail": "重发失败",
+    "logs.empty": "暂无发送记录"
 }

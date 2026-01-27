@@ -27,6 +27,9 @@
     "common.disabled": "Disabled",
     "common.deleted": "Deleted",
     "common.saved": "Saved",
+    "common.total": "Total",
+    "common.records": "records",
+    "common.copied": "Copied",
     
     "nav.dashboard": "Dashboard",
     "nav.send": "Send Center",

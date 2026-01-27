@@ -23,5 +23,6 @@
     "logs.alert.resend_confirm": "Are you sure you want to resend this email?",
     "logs.toast.not_found": "Log record not found",
     "logs.toast.queued": "Queued for resending",
-    "logs.toast.resend_fail": "Resend failed"
+    "logs.toast.resend_fail": "Resend failed",
+    "logs.empty": "No logs found"
 }

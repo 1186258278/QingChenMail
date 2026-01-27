@@ -80,14 +80,20 @@ const I18n = {
 
     // 渲染页面上所有 data-i18n 元素
     render: function() {
-        document.querySelectorAll('[data-i18n], [data-i18n-attr]').forEach(el => {
+        document.querySelectorAll('[data-i18n], [data-i18n-attr], [data-i18n-html]').forEach(el => {
             const key = el.getAttribute('data-i18n');
+            const htmlKey = el.getAttribute('data-i18n-html');
             // 支持 placeholder 翻译 data-i18n-attr="placeholder:login.username"
             const attrConfig = el.getAttribute('data-i18n-attr');
             
             if (key) {
-                // 使用 innerHTML 以支持 HTML 实体 (如 &copy;)
-                el.innerHTML = this.t(key);
+                // 安全修复：默认使用 textContent 防止 XSS
+                el.textContent = this.t(key);
+            }
+            
+            // 明确需要 HTML 渲染的使用 data-i18n-html (谨慎使用)
+            if (htmlKey) {
+                el.innerHTML = this.t(htmlKey);
             }
 
             if (attrConfig) {

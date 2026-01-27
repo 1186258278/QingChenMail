@@ -103,13 +103,17 @@
                         if (!msg.is_read) div.classList.add('font-medium');
                         
                         div.onclick = () => loadMessage(msg.id);
+                        // 安全修复：转义用户输入防止 XSS
+                        const safeFrom = Utils.escapeHtml(msg.from_addr || '');
+                        const safeSubject = Utils.escapeHtml(msg.subject || '') || I18n.t('inbox.no_subject');
+                        const safeTo = Utils.escapeHtml(msg.to_addr || '');
                         div.innerHTML = `
                             <div class="flex justify-between mb-1">
-                                <span class="text-sm text-gray-800 truncate w-2/3" title="${msg.from_addr}">${msg.from_addr}</span>
+                                <span class="text-sm text-gray-800 truncate w-2/3" title="${safeFrom}">${safeFrom}</span>
                                 <span class="text-xs text-gray-400 whitespace-nowrap">${formatDate(msg.created_at)}</span>
                             </div>
-                            <h4 class="text-sm text-gray-600 truncate mb-1">${msg.subject || I18n.t('inbox.no_subject')}</h4>
-                            <p class="text-xs text-gray-400 truncate">To: ${msg.to_addr}</p>
+                            <h4 class="text-sm text-gray-600 truncate mb-1">${safeSubject}</h4>
+                            <p class="text-xs text-gray-400 truncate">To: ${safeTo}</p>
                             ${!msg.is_read ? '<span class="absolute top-4 right-4 w-2 h-2 bg-blue-600 rounded-full"></span>' : ''}
                         `;
                         container.appendChild(div);

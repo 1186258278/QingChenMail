@@ -27,6 +27,9 @@
     "common.disabled": "禁用",
     "common.deleted": "已删除",
     "common.saved": "已保存",
+    "common.total": "共",
+    "common.records": "条",
+    "common.copied": "已复制",
     
     "nav.dashboard": "仪表盘",
     "nav.send": "发送中心",

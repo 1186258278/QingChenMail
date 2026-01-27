@@ -33,7 +33,7 @@
             </div>
             <form onsubmit="saveDomain(event)">
                 <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="domains.modal.domain_label">域名</label>
-                <input type="text" id="domain-name" required placeholder="例如: newsletter.example.com" class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none mb-6">
+                <input type="text" id="domain-name" required placeholder="例如: newsletter.example.com" pattern="^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$" title="请输入有效的域名格式" class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none mb-6">
                 
                 <!-- 初始配置: 邮件子域名 -->
                 <div class="mb-6">

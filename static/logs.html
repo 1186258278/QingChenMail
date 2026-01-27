@@ -71,6 +71,12 @@
                 const tbody = document.getElementById('logs-list');
                 tbody.innerHTML = '';
 
+                if (list.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-12 text-gray-400" data-i18n="logs.empty">暂无发送记录</td></tr>`;
+                    if (typeof I18n !== 'undefined' && I18n.isReady) I18n.render();
+                    return;
+                }
+
                 list.forEach(log => {
                     const tr = document.createElement('tr');
                     tr.className = 'hover:bg-gray-50 transition cursor-pointer';

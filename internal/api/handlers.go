@@ -18,6 +18,7 @@ import (
 	mathrand "math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -190,6 +191,10 @@ func AuthMiddleware() gin.HandlerFunc {
 
 		// 1. 尝试验证 JWT
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			// 安全修复：验证签名算法，防止算法混淆攻击
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
 			return []byte(config.AppConfig.JWTSecret), nil
 		})
 
@@ -757,10 +762,16 @@ func SendHandler(c *gin.Context) {
 				fileData, err = base64.StdEncoding.DecodeString(att.Content)
 			} else if att.URL != "" {
 				sourceType = "api_url"
-				resp, err := http.Get(att.URL)
+				// 安全修复：SSRF 防护，检查是否为内网 URL
+				if isInternalURLCheck(att.URL) {
+					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Attachment URL %s is blocked (internal network)", att.Filename)})
+					return
+				}
+				client := &http.Client{Timeout: 30 * time.Second}
+				resp, err := client.Get(att.URL)
 				if err == nil {
 					defer resp.Body.Close()
-					fileData, err = io.ReadAll(resp.Body)
+					fileData, err = io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024))
 				}
 			}
 
@@ -1555,4 +1566,25 @@ func killProcess(pid string) error {
 		// kill -9 <pid>
 		return exec.Command("kill", "-9", pid).Run()
 	}
+}
+
+// isInternalURLCheck 检查 URL 是否指向内网 (SSRF 防护)
+func isInternalURLCheck(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return true // 解析失败视为不安全
+	}
+
+	host := u.Hostname()
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return true // DNS 解析失败视为不安全
+	}
+
+	for _, ip := range ips {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+			return true
+		}
+	}
+	return false
 }
