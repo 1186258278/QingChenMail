@@ -153,6 +153,37 @@
                             <li data-i18n="settings.recv.req_3">Linux 下监听 25 端口需要 root 权限或使用 <code class="bg-yellow-100 px-1 rounded">setcap</code></li>
                         </ul>
                     </div>
+                    
+                    <!-- 端口被占用解决方案 -->
+                    <details class="bg-blue-50 border border-blue-200 text-blue-700 text-sm rounded-lg">
+                        <summary class="p-3 cursor-pointer font-medium hover:bg-blue-100 rounded-lg transition" data-i18n="settings.recv.port_conflict_title">💡 端口 25 被占用？查看解决方案</summary>
+                        <div class="px-3 pb-3 text-xs space-y-3">
+                            <div>
+                                <p class="font-medium text-blue-800 mb-1" data-i18n="settings.recv.solution_1_title">方案 1: 端口转发 (推荐)</p>
+                                <p class="text-blue-600 mb-1" data-i18n="settings.recv.solution_1_desc">程序监听 2525，用 iptables 转发 25→2525：</p>
+                                <code class="block bg-blue-100 p-2 rounded text-xs overflow-x-auto">sudo iptables -t nat -A PREROUTING -p tcp --dport 25 -j REDIRECT --to-port 2525</code>
+                            </div>
+                            <div>
+                                <p class="font-medium text-blue-800 mb-1" data-i18n="settings.recv.solution_2_title">方案 2: Nginx TCP 代理</p>
+                                <p class="text-blue-600 mb-1" data-i18n="settings.recv.solution_2_desc">使用 Nginx stream 模块代理：</p>
+                                <code class="block bg-blue-100 p-2 rounded text-xs overflow-x-auto whitespace-pre">stream {
+    server {
+        listen 25;
+        proxy_pass 127.0.0.1:2525;
+    }
+}</code>
+                            </div>
+                            <div>
+                                <p class="font-medium text-blue-800 mb-1" data-i18n="settings.recv.solution_3_title">方案 3: 停用原有 MTA</p>
+                                <p class="text-blue-600 mb-1" data-i18n="settings.recv.solution_3_desc">停止 Postfix/Sendmail 等：</p>
+                                <code class="block bg-blue-100 p-2 rounded text-xs overflow-x-auto">sudo systemctl stop postfix && sudo systemctl disable postfix</code>
+                            </div>
+                            <div>
+                                <p class="font-medium text-blue-800 mb-1" data-i18n="settings.recv.solution_4_title">方案 4: 与 Postfix 集成</p>
+                                <p class="text-blue-600 mb-1" data-i18n="settings.recv.solution_4_desc">配置 Postfix 将邮件转发到本程序，详见文档。</p>
+                            </div>
+                        </div>
+                    </details>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="settings.recv.port_label">监听端口</label>
