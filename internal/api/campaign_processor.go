@@ -63,11 +63,11 @@ func ProcessCampaign(campaign *database.Campaign) error {
 		"sent_count":  0,
 	})
 
-	// [安全修复] 使用带 context 的 goroutine，支持超时和取消
+	// 使用带 context 的 goroutine，支持超时和取消
 	ctx, cancel := context.WithTimeout(context.Background(), CampaignProcessTimeout)
 	
 	go func() {
-		// [安全修复] 添加 panic 恢复，防止 goroutine panic 导致程序崩溃
+		// panic 恢复
 		defer func() {
 			cancel() // 确保 context 被取消
 			if r := recover(); r != nil {
@@ -90,7 +90,7 @@ func ProcessCampaign(campaign *database.Campaign) error {
 			// Generate Tracking ID
 			trackingID := uuid.New().String()
 
-			// [安全修复] 对用户输入进行 HTML 转义，防止 XSS 攻击
+			// 对用户输入进行 HTML 转义
 			safeName := html.EscapeString(contact.Name)
 			safeEmail := html.EscapeString(contact.Email)
 
@@ -153,7 +153,7 @@ func ProcessCampaign(campaign *database.Campaign) error {
 				ChannelID:  smtpConfig.ID,
 				Status:     "pending",
 				CampaignID: campaign.ID,
-				TrackingID: trackingID, // [新增]
+				TrackingID: trackingID,
 			}
 			database.DB.Create(&task)
 		}

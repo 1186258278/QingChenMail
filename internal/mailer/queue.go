@@ -33,7 +33,7 @@ func SendEmailAsync(req SendRequest) (uint, error) {
 		Status:      "pending",
 		Retries:     0,
 		NextRetry:   time.Now(),
-		TrackingID:  req.TrackingID, // [新增]
+		TrackingID:  req.TrackingID,
 	}
 
 	if err := database.DB.Create(&task).Error; err != nil {
@@ -81,7 +81,7 @@ func processQueue() {
 	}
 
 	for _, task := range tasks {
-		// [优化] 使用原子更新防止竞争条件
+		// 使用原子更新防止竞争条件
 		// 只有当 status 仍为 pending/failed 时才更新为 processing
 		// 这可以防止多个 worker (如果部署了多个实例) 处理同一任务
 		result := database.DB.Model(&database.EmailQueue{}).
@@ -137,7 +137,7 @@ func executeTask(task database.EmailQueue) error {
 		Body:        task.Body,
 		Attachments: attachments,
 		ChannelID:   task.ChannelID,
-		TrackingID:  task.TrackingID, // [新增] 传递 TrackingID
+		TrackingID:  task.TrackingID,
 	}
 
 	// 调用同步发送逻辑

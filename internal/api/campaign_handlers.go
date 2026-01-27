@@ -284,7 +284,6 @@ func UpdateCampaignHandler(c *gin.Context) {
 	campaign.TargetType = input.TargetType
 	campaign.TargetGroupID = input.TargetGroupID
 	campaign.TargetList = input.TargetList
-	// [修复] 支持更新 ScheduledAt 字段
 	campaign.ScheduledAt = input.ScheduledAt
 	
 	if err := database.DB.Save(&campaign).Error; err != nil {

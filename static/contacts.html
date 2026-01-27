@@ -176,7 +176,7 @@
                         const div = document.createElement('div');
                         div.className = `p-3 rounded-lg cursor-pointer flex justify-between items-center group transition ${currentGroupId === g.id ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'hover:bg-gray-50 text-gray-700'}`;
                         div.onclick = () => selectGroup(g);
-                        // [安全修复] 使用 Utils.escapeHtml 转义用户输入，防止 XSS
+                        // 转义用户输入
                         const safeName = Utils.escapeHtml(g.name);
                         const safeDesc = Utils.escapeHtml(g.description || '');
                         div.innerHTML = `
@@ -190,7 +190,7 @@
                                 <button data-action="delete" data-id="${g.id}" class="delete-group-btn p-1 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
                             </div>
                         `;
-                        // [安全修复] 使用事件委托，避免 onclick 属性拼接用户数据
+                        // 使用事件委托
                         div.querySelector('.edit-group-btn').onclick = (e) => { e.stopPropagation(); editGroupById(g.id); };
                         div.querySelector('.delete-group-btn').onclick = (e) => { e.stopPropagation(); deleteGroup(e, g.id); };
                         list.appendChild(div);
@@ -225,7 +225,7 @@
             document.getElementById('group-desc').value = '';
         }
 
-        // [安全修复] 使用 ID 获取分组数据，避免在 onclick 中拼接用户数据
+        // 通过 ID 获取分组数据
         async function editGroupById(id) {
             try {
                 const groups = await request('/contacts/groups');
@@ -313,7 +313,7 @@
                     res.data.forEach(c => {
                         const tr = document.createElement('tr');
                         tr.className = 'hover:bg-gray-50 transition border-b border-gray-100 last:border-0';
-                        // [安全修复] 使用 Utils.escapeHtml 转义用户输入，防止 XSS
+                        // 转义用户输入
                         const safeEmail = Utils.escapeHtml(c.email);
                         const safeName = Utils.escapeHtml(c.name || '-');
                         const safeStatus = Utils.escapeHtml(c.status);

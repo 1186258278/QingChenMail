@@ -10,7 +10,7 @@ import (
 	"os"
 )
 
-const Version = "v1.0.3"
+const Version = "v1.0.4"
 
 type Config struct {
 	Domain         string `json:"domain"`
@@ -20,7 +20,7 @@ type Config struct {
 	// Web Server Config
 	Host           string `json:"host"`            // 监听地址，默认 0.0.0.0
 	Port           string `json:"port"`            // 监听端口
-	BaseURL        string `json:"base_url"`        // [新增] 公网访问地址 (用于生成追踪链接)，如 http://mail.example.com:9901
+	BaseURL        string `json:"base_url"`        // 公网访问地址 (用于生成追踪链接)
 	EnableSSL      bool   `json:"enable_ssl"`      // 是否开启 HTTPS
 	CertFile       string `json:"cert_file"`       // 证书文件路径
 	KeyFile        string `json:"key_file"`        // 私钥文件路径

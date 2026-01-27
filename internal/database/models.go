@@ -15,12 +15,12 @@ type EmailLog struct {
 
 	Recipient string `json:"recipient"`
 	Subject   string `json:"subject"`
-	Body      string `json:"body"`   // [新增] 记录邮件正文
+	Body      string `json:"body"`
 	Status    string `json:"status"` // "success" or "failed"
 	ErrorMsg  string `json:"error_msg"`
 	ClientIP  string `json:"client_ip"`
 	Channel    string `json:"channel"` // "direct" or "smtp_config_id"
-	CampaignID uint   `json:"campaign_id" gorm:"index"` // [新增] 关联营销任务
+	CampaignID uint   `json:"campaign_id" gorm:"index"`
 
 	// 追踪字段
 	TrackingID   string     `json:"tracking_id" gorm:"index"`
@@ -47,7 +47,7 @@ type EmailQueue struct {
 	Retries     int       `json:"retries"`
 	NextRetry   time.Time `json:"next_retry" gorm:"index"`
 	ErrorMsg    string    `json:"error_msg"`
-	CampaignID  uint      `json:"campaign_id" gorm:"index"` // [新增] 关联营销任务
+	CampaignID  uint      `json:"campaign_id" gorm:"index"`
 	TrackingID  string    `json:"tracking_id"`              // 预生成的追踪ID
 }
 

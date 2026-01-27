@@ -12,7 +12,7 @@ import (
 // 分页限制常量
 const (
 	DefaultPageLimit = 20
-	MaxPageLimit     = 100 // [安全修复] 最大分页限制，防止资源滥用
+	MaxPageLimit     = 100 // 最大分页限制
 )
 
 // ListInboxHandler 获取收件箱列表
@@ -21,7 +21,7 @@ func ListInboxHandler(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 
-	// [安全修复] 参数校验
+	// 参数校验
 	if page < 1 {
 		page = 1
 	}

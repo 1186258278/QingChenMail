@@ -101,7 +101,7 @@ function showToast(msg, type = 'success') {
     const color = type === 'success' ? 'bg-green-600' : 'bg-red-600';
     div.className = `fixed bottom-5 right-5 ${color} text-white px-6 py-3 rounded-lg shadow-lg transform transition-all duration-300 translate-y-10 opacity-0 z-50 flex items-center`;
     
-    // [安全修复] 防止 XSS: 使用 textContent 而不是 innerHTML
+    // 使用 textContent 防止 XSS
     const span = document.createElement('span');
     span.textContent = msg;
     div.appendChild(span);
@@ -121,7 +121,7 @@ function showToast(msg, type = 'success') {
 // 工具函数
 const Utils = {
     formatDate: (str) => new Date(str).toLocaleString(),
-    // [安全修复] 正确的 HTML 转义函数，防止 XSS 攻击
+    // HTML 转义
     escapeHtml: (unsafe) => {
         if (!unsafe) return '';
         return String(unsafe)
@@ -131,7 +131,7 @@ const Utils = {
              .replace(/"/g, '&quot;')
              .replace(/'/g, '&#039;');
     },
-    // [安全修复] 简单的 HTML 净化函数 (生产环境建议使用 DOMPurify)
+    // HTML 净化 (生产环境建议使用 DOMPurify)
     sanitizeHtml: (html) => {
         if (!html) return '';
         // 创建一个临时 div 来解析 HTML

@@ -34,7 +34,7 @@ func main() {
 
 	// 处理重置密码指令
 	if *resetPwd {
-		// [安全修复] 使用 Bcrypt 哈希存储密码
+		// 使用 Bcrypt 哈希存储密码
 		// 为了简化运维，重置操作仍然将密码设为 123456，但存储为 Hash
 		// 建议管理员在重置后立即登录并修改密码
 		hashedPassword, err := database.HashPassword("123456")
@@ -69,7 +69,7 @@ func main() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 
-	// [安全修复] 添加请求体大小限制 (32MB)
+	// 请求体大小限制 (32MB)
 	r.MaxMultipartMemory = 32 << 20
 
 	// 4. API 路由

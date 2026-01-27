@@ -83,7 +83,7 @@ func SendEmail(req SendRequest) error {
 			if strings.HasPrefix(att.URL, "local://") {
 				localPath := strings.TrimPrefix(att.URL, "local://")
 
-				// [安全修复] 路径遍历防护
+				// 路径遍历防护
 				// 1. 清理路径，防止 ../ 等遍历攻击
 				localPath = filepath.Clean(localPath)
 
@@ -253,7 +253,7 @@ func sendWithSMTPConfig(req SendRequest, from, to string, msg []byte, cfg databa
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	auth := smtp.PlainAuth("", cfg.Username, cfg.Password, cfg.Host)
 
-	// [安全修复] 默认强制 TLS 验证，除非明确需要跳过
+	// 默认强制 TLS 验证
 	// 为了兼容性，我们暂时使用 InsecureSkipVerify: false (安全模式)
 	// 如果用户使用的是自签名证书，需要在 SMTP 配置中添加 SkipVerify 选项 (DB Schema 需升级)
 	// 鉴于本次是代码修复，先设为 false，提升安全性。
@@ -363,7 +363,7 @@ func sendByDirect(req SendRequest, from, to string, msg []byte) error {
 			continue
 		}
 
-		// [优化] 发送正确的 HELO/EHLO 主机名
+		// 发送正确的 HELO/EHLO 主机名
 		// 使用发件人域名作为 HELO 主机名，这有助于通过 SPF/DMARC 检查
 		// 如果是子域名发信 (如 support@mail.example.com)，这里会自动使用 mail.example.com
 		senderDomain := extractDomain(from)
@@ -431,7 +431,7 @@ func logAndReturnError(req SendRequest, reason string, err error) error {
 		Status:     "failed",
 		ErrorMsg:   fmt.Sprintf("%s: %s", reason, msg),
 		Channel:    channel,
-		TrackingID: req.TrackingID, // [新增] 保存 TrackingID
+		TrackingID: req.TrackingID,
 	})
 	return fmt.Errorf("%s: %v", reason, err)
 }
@@ -443,6 +443,6 @@ func logSuccess(req SendRequest, channel string) {
 		Body:       req.Body, // 保存正文
 		Status:     "success",
 		Channel:    channel,
-		TrackingID: req.TrackingID, // [新增] 保存 TrackingID
+		TrackingID: req.TrackingID,
 	})
 }

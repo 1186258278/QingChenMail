@@ -151,7 +151,7 @@
                 document.getElementById('msg-to').innerText = msg.to_addr;
                 document.getElementById('msg-date').innerText = new Date(msg.created_at).toLocaleString();
                 
-                // [安全修复] 使用 sanitizeHtml 防止 XSS 攻击
+                // 净化 HTML 内容
                 // 邮件正文可能包含 HTML，但需要移除危险标签和属性
                 const msgBody = document.getElementById('msg-body');
                 if (msg.body && (msg.body.includes('<html') || msg.body.includes('<div') || msg.body.includes('<p'))) {

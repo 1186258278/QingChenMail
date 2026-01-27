@@ -67,7 +67,7 @@ func InitDB() {
 		&ContactGroup{},
 		&Contact{},
 		&Campaign{},
-		&Inbox{}, // [新增] 收件箱
+		&Inbox{},
 	}
 
 	// 3. 执行基础结构校准 (AutoMigrate)
@@ -154,7 +154,7 @@ func runSeeding() {
 	DB.Model(&User{}).Where("username = ?", "admin").Count(&adminCount)
 	if adminCount == 0 {
 		log.Println("[DB] Seeding default admin user...")
-		// [安全修复] 使用 Bcrypt 哈希存储默认密码，而非明文
+		// 使用 Bcrypt 哈希存储默认密码
 		hashedPassword, err := HashPassword("123456")
 		if err != nil {
 			log.Printf("[DB] Warning: Failed to hash default password: %v, using plain text", err)

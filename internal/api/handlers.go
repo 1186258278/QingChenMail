@@ -261,7 +261,7 @@ func LoginHandler(c *gin.Context) {
 		delete(captchaStore, req.CaptchaID) // 一次性
 		captchaMutex.Unlock()
 
-		// [安全修复] 验证码过期检查
+		// 验证码过期检查
 		if !ok || entry.Code != req.CaptchaCode || time.Now().After(entry.ExpiresAt) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired captcha code"})
 			return
@@ -340,7 +340,7 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
-	// [安全修复] 根据 SSL 配置动态设置 Secure 标志
+	// 根据 SSL 配置动态设置 Cookie Secure 标志
 	// Secure=true 时，Cookie 仅通过 HTTPS 传输
 	secureCookie := config.AppConfig.EnableSSL
 	c.SetCookie("token", tokenString, 3600*24, "/", "", secureCookie, true)
@@ -635,7 +635,7 @@ func VerifyDomainHandler(c *gin.Context) {
 		}
 	}
 
-	// 5. [新增] 验证 A 记录 (网站访问)
+	// 5. 验证 A 记录 (网站访问)
 	// 虽然数据库没有存储字段，但可以在返回 JSON 中临时添加，或者前端单独处理
 	// 这里为了完整性，我们检查一下，虽然目前 DB 没存状态
 	// aRecords, _ := resolver.LookupHost(ctx, domain.Name)
@@ -764,7 +764,7 @@ func SendHandler(c *gin.Context) {
 				}
 			}
 
-			// [安全修复] 限制文件大小 (例如 10MB)
+			// 限制附件大小 (10MB)
 			const MaxFileSize = 10 * 1024 * 1024
 			if err == nil && len(fileData) > MaxFileSize {
 				c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Attachment %s exceeds limit (10MB)", att.Filename)})
@@ -919,7 +919,7 @@ func UpdateConfigHandler(c *gin.Context) {
 		newConfig.Port = config.AppConfig.Port
 	}
 
-	// 4. [新增] 端口可用性检测 (如果启用了接收服务且修改了端口)
+	// 4. 端口可用性检测 (如果启用了接收服务且修改了端口)
 	if newConfig.EnableReceiver && (newConfig.ReceiverPort != config.AppConfig.ReceiverPort || !config.AppConfig.EnableReceiver) {
 		port := newConfig.ReceiverPort
 		if port == "" {
@@ -1009,7 +1009,7 @@ func BackupHandler(c *gin.Context) {
 	files := []string{"config.json", "goemail.db"}
 
 	for _, filename := range files {
-		// [安全修复] 使用闭包立即处理文件，避免 defer 在循环中累积导致资源泄露
+		// 使用闭包立即处理文件，避免 defer 在循环中累积
 		func() {
 			f, err := os.Open(filename)
 			if err != nil {
@@ -1029,7 +1029,7 @@ func BackupHandler(c *gin.Context) {
 
 // CaptchaHandler 生成验证码
 func CaptchaHandler(c *gin.Context) {
-	// [安全修复] 使用 crypto/rand 生成随机数字
+	// 使用 crypto/rand 生成随机数字
 	// 为了简化，我们生成 4 字节的随机数然后取模
 	b := make([]byte, 2)
 	rand.Read(b)
@@ -1040,7 +1040,7 @@ func CaptchaHandler(c *gin.Context) {
 	id := generateRandomKey() // 复用随机字符串生成
 
 	captchaMutex.Lock()
-	// [安全修复] 改进的验证码清理逻辑：只清理过期的，而非全部清空
+	// 清理过期的验证码
 	now := time.Now()
 	if len(captchaStore) >= captchaMaxSize {
 		// 清理过期的验证码
@@ -1423,7 +1423,7 @@ func TestPortHandler(c *gin.Context) {
 // getProcessInfo 获取占用端口的进程信息
 func getProcessInfo(port string) string {
 	if runtime.GOOS == "windows" {
-		// [安全修复] 避免 cmd /C 拼接，防止命令注入
+		// 直接调用 netstat，避免 shell 注入风险
 		// 直接调用 netstat，不使用 findstr
 		cmd := exec.Command("netstat", "-ano")
 		out, err := cmd.Output()
@@ -1469,7 +1469,7 @@ func getProcessInfo(port string) string {
 
 // KillProcessHandler 强制关闭占用端口的进程
 func KillProcessHandler(c *gin.Context) {
-	// [安全修复] 禁用远程 Kill 功能，防止滥用。
+	// 禁用远程进程终止功能
 	// 如需启用，请配置 EnableProcessControl (暂未实现配置项，目前默认禁用)
 	// 
 	// 如果确实需要在开发环境使用，请手动注释下行：

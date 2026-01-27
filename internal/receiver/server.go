@@ -387,7 +387,7 @@ func isValidPort(port string) bool {
 }
 
 func checkPortOccupancy(port string) {
-	// [安全修复] 验证端口号，防止命令注入
+	// 验证端口号格式
 	if !isValidPort(port) {
 		log.Printf("[Receiver] Invalid port number: %s", port)
 		return
@@ -395,7 +395,7 @@ func checkPortOccupancy(port string) {
 
 	log.Printf("[Receiver] Checking port %s usage...", port)
 	if runtime.GOOS == "windows" {
-		// [安全修复] 不使用 cmd /C 和管道，直接调用 netstat 并在 Go 中过滤
+		// 直接调用 netstat 并在 Go 中过滤输出
 		cmd := exec.Command("netstat", "-ano")
 		out, err := cmd.Output()
 		if err != nil {

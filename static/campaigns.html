@@ -159,7 +159,7 @@
                     
                     const progress = c.total_count > 0 ? Math.round((c.sent_count / c.total_count) * 100) : 0;
 
-                    // [安全修复] 使用 Utils.escapeHtml 转义用户输入，防止 XSS
+                    // 转义用户输入
                     const safeName = Utils.escapeHtml(c.name);
                     const safeSubject = Utils.escapeHtml(c.subject);
                     const safeStatus = Utils.escapeHtml(c.status);

@@ -124,7 +124,7 @@ func TrackClickHandler(c *gin.Context) {
 	}
 	targetURL := string(targetURLBytes)
 
-	// [安全修复] 验证重定向URL，防止开放重定向攻击
+	// 验证重定向URL，防止开放重定向
 	if !validateRedirectURL(targetURL) {
 		c.String(http.StatusBadRequest, "Invalid or unsafe redirect URL")
 		return
