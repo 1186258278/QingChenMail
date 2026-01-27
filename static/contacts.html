@@ -176,17 +176,23 @@
                         const div = document.createElement('div');
                         div.className = `p-3 rounded-lg cursor-pointer flex justify-between items-center group transition ${currentGroupId === g.id ? 'bg-blue-50 text-blue-700 border border-blue-100' : 'hover:bg-gray-50 text-gray-700'}`;
                         div.onclick = () => selectGroup(g);
+                        // [安全修复] 使用 Utils.escapeHtml 转义用户输入，防止 XSS
+                        const safeName = Utils.escapeHtml(g.name);
+                        const safeDesc = Utils.escapeHtml(g.description || '');
                         div.innerHTML = `
                             <div class="flex flex-col truncate">
-                                <span class="font-medium truncate">${g.name}</span>
-                                <span class="text-xs ${currentGroupId === g.id ? 'text-blue-500' : 'text-gray-400'} truncate">${g.description || ''}</span>
+                                <span class="font-medium truncate">${safeName}</span>
+                                <span class="text-xs ${currentGroupId === g.id ? 'text-blue-500' : 'text-gray-400'} truncate">${safeDesc}</span>
                             </div>
                             <div class="flex items-center space-x-2">
                                 <span class="text-xs bg-white bg-opacity-50 px-2 py-0.5 rounded-full border border-gray-200">${g.count}</span>
-                                <button onclick="editGroup(event, ${g.id}, '${g.name}', '${g.description||''}')" class="p-1 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>
-                                <button onclick="deleteGroup(event, ${g.id})" class="p-1 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
+                                <button data-action="edit" data-id="${g.id}" class="edit-group-btn p-1 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg></button>
+                                <button data-action="delete" data-id="${g.id}" class="delete-group-btn p-1 text-gray-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg></button>
                             </div>
                         `;
+                        // [安全修复] 使用事件委托，避免 onclick 属性拼接用户数据
+                        div.querySelector('.edit-group-btn').onclick = (e) => { e.stopPropagation(); editGroupById(g.id); };
+                        div.querySelector('.delete-group-btn').onclick = (e) => { e.stopPropagation(); deleteGroup(e, g.id); };
                         list.appendChild(div);
                     });
                 } else {
@@ -219,6 +225,23 @@
             document.getElementById('group-desc').value = '';
         }
 
+        // [安全修复] 使用 ID 获取分组数据，避免在 onclick 中拼接用户数据
+        async function editGroupById(id) {
+            try {
+                const groups = await request('/contacts/groups');
+                const g = groups.find(item => item.id === id);
+                if (!g) return;
+                
+                document.getElementById('group-modal').classList.remove('hidden');
+                document.getElementById('group-id').value = id;
+                document.getElementById('group-name').value = g.name || '';
+                document.getElementById('group-desc').value = g.description || '';
+            } catch (e) {
+                showToast(e.message, 'error');
+            }
+        }
+
+        // 保留旧函数签名以兼容
         function editGroup(e, id, name, desc) {
             e.stopPropagation();
             document.getElementById('group-modal').classList.remove('hidden');
@@ -290,10 +313,14 @@
                     res.data.forEach(c => {
                         const tr = document.createElement('tr');
                         tr.className = 'hover:bg-gray-50 transition border-b border-gray-100 last:border-0';
+                        // [安全修复] 使用 Utils.escapeHtml 转义用户输入，防止 XSS
+                        const safeEmail = Utils.escapeHtml(c.email);
+                        const safeName = Utils.escapeHtml(c.name || '-');
+                        const safeStatus = Utils.escapeHtml(c.status);
                         tr.innerHTML = `
-                            <td class="p-4 font-mono text-sm text-gray-700">${c.email}</td>
-                            <td class="p-4 text-sm text-gray-600">${c.name || '-'}</td>
-                            <td class="p-4"><span class="px-2 py-0.5 rounded text-xs bg-green-100 text-green-700">${c.status}</span></td>
+                            <td class="p-4 font-mono text-sm text-gray-700">${safeEmail}</td>
+                            <td class="p-4 text-sm text-gray-600">${safeName}</td>
+                            <td class="p-4"><span class="px-2 py-0.5 rounded text-xs bg-green-100 text-green-700">${safeStatus}</span></td>
                             <td class="p-4 text-right">
                                 <button onclick="deleteContact(${c.id})" class="text-red-500 hover:text-red-700 text-sm" data-i18n="common.delete">删除</button>
                             </td>
