@@ -4,8 +4,12 @@
   "dkim_private_key": "",
   "host": "0.0.0.0",
   "port": "9901",
+  "base_url": "",
   "enable_ssl": false,
   "cert_file": "",
   "key_file": "",
+  "enable_receiver": false,
+  "receiver_port": "2525",
+  "receiver_tls": false,
   "jwt_secret": "will-be-auto-generated-on-first-run"
 }

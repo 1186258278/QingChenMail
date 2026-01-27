@@ -3,7 +3,7 @@
 > **企业级自建邮件营销与投递系统 | Enterprise Self-hosted Email Marketing Solution**
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Go Version](https://img.shields.io/badge/go-1.21+-00ADD8.svg)](https://golang.org)
+[![Go Version](https://img.shields.io/badge/go-1.25+-00ADD8.svg)](https://golang.org)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 [![Company](https://img.shields.io/badge/Company-QingChen%20Cloud-orange.svg)](https://qingchencloud.com)
 
