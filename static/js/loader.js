@@ -275,6 +275,13 @@
 
     // 显示加载器
     function show() {
+        // 确保 body 存在
+        if (!document.body) {
+            // 如果 body 还不存在，等待 DOMContentLoaded
+            document.addEventListener('DOMContentLoaded', show);
+            return;
+        }
+        
         let loader = document.getElementById('qc-loader');
         if (!loader) {
             loader = createLoader();

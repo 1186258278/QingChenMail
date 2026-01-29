@@ -915,16 +915,18 @@ func UpdateConfigHandler(c *gin.Context) {
 	}
 
 	// 2. 保护关键字段或执行重置
-	if newConfig.DKIMPrivateKey == "" {
+	// 注意：前端返回的是 "****** (Hidden)"，需要特殊处理
+	if newConfig.DKIMPrivateKey == "" || strings.Contains(newConfig.DKIMPrivateKey, "Hidden") || strings.HasPrefix(newConfig.DKIMPrivateKey, "***") {
 		newConfig.DKIMPrivateKey = config.AppConfig.DKIMPrivateKey
 	}
 	
 	// JWT Secret 处理：支持重置
+	// 注意：前端返回的是 "****** (Hidden)"，需要特殊处理
 	if newConfig.JWTSecret == "RESET" {
 		b := make([]byte, 16)
 		rand.Read(b)
 		newConfig.JWTSecret = fmt.Sprintf("goemail-secret-%x", b)
-	} else if newConfig.JWTSecret == "" {
+	} else if newConfig.JWTSecret == "" || strings.Contains(newConfig.JWTSecret, "Hidden") || strings.HasPrefix(newConfig.JWTSecret, "***") {
 		newConfig.JWTSecret = config.AppConfig.JWTSecret
 	}
 
