@@ -1208,7 +1208,12 @@
             }
         }
         
-        loadDomains();
+        // 确保页面完全加载后再初始化
+        if (document.readyState === 'complete') {
+            loadDomains();
+        } else {
+            window.addEventListener('load', loadDomains);
+        }
     </script>
 </body>
 </html>

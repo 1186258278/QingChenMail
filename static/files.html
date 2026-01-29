@@ -60,9 +60,13 @@
         async function loadFiles() {
             try {
                 const list = await request('/files');
-                allFiles = list;
+                allFiles = Array.isArray(list) ? list : [];
                 renderList();
-            } catch (e) {}
+            } catch (e) {
+                console.error('[Files] 加载文件列表失败:', e);
+                allFiles = [];
+                renderList();
+            }
         }
 
         function renderList() {
@@ -182,7 +186,12 @@
             } catch (e) {}
         }
 
-        loadFiles();
+        // 确保页面完全加载后再初始化
+        if (document.readyState === 'complete') {
+            loadFiles();
+        } else {
+            window.addEventListener('load', loadFiles);
+        }
     </script>
 </body>
 </html>

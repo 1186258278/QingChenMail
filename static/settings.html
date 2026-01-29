@@ -482,9 +482,11 @@
                         <svg class="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                         <span class="text-sm font-medium text-gray-700" data-i18n="settings.update.auto_title">自动更新</span>
                     </div>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" id="auto-update-toggle" class="sr-only peer" onchange="toggleAutoUpdate()">
-                        <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-cyan-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-600"></div>
+                    <label class="relative inline-flex items-center cursor-pointer" onclick="toggleAutoUpdate()">
+                        <input type="checkbox" id="auto-update-toggle" class="sr-only">
+                        <div id="auto-update-toggle-track" class="w-11 h-6 rounded-full transition-colors duration-200" style="background-color: #d1d5db;">
+                            <div id="auto-update-toggle-thumb" class="absolute top-[2px] left-[2px] bg-white border border-gray-300 rounded-full h-5 w-5 transition-transform duration-200"></div>
+                        </div>
                     </label>
                 </div>
                 <div id="auto-update-settings" class="hidden space-y-3">
@@ -1589,6 +1591,9 @@
                 document.getElementById('auto-update-interval').value = config.interval || 24;
                 document.getElementById('auto-update-time').value = config.time || '03:00';
                 
+                // 更新开关样式
+                updateToggleStyle(config.enabled);
+                
                 // 根据开关状态显示/隐藏设置
                 document.getElementById('auto-update-settings').classList.toggle('hidden', !config.enabled);
             } catch (e) {
@@ -1597,9 +1602,26 @@
         }
 
         function toggleAutoUpdate() {
-            const enabled = document.getElementById('auto-update-toggle').checked;
+            const checkbox = document.getElementById('auto-update-toggle');
+            checkbox.checked = !checkbox.checked;
+            const enabled = checkbox.checked;
+            
+            updateToggleStyle(enabled);
             document.getElementById('auto-update-settings').classList.toggle('hidden', !enabled);
             saveAutoUpdateConfig();
+        }
+        
+        function updateToggleStyle(enabled) {
+            const track = document.getElementById('auto-update-toggle-track');
+            const thumb = document.getElementById('auto-update-toggle-thumb');
+            
+            if (enabled) {
+                track.style.backgroundColor = '#0891b2'; // cyan-600
+                thumb.style.transform = 'translateX(20px)';
+            } else {
+                track.style.backgroundColor = '#d1d5db'; // gray-300
+                thumb.style.transform = 'translateX(0)';
+            }
         }
 
         async function saveAutoUpdateConfig() {
@@ -1619,14 +1641,24 @@
         }
 
         // 页面加载时初始化
-        loadUpdateInfo();
-        loadBackupList();
-        loadAutoUpdateConfig();
-
-        // 备份列表定时刷新（每30秒）
-        setInterval(() => {
-            loadBackupList();
-        }, 30000);
+        function initPage() {
+            console.log('[Settings] 初始化页面...');
+            loadUpdateInfo();
+            loadBackupList().then(() => console.log('[Settings] 备份列表已加载')).catch(e => console.error('[Settings] 备份列表加载失败:', e));
+            loadAutoUpdateConfig();
+            
+            // 备份列表定时刷新（每30秒）
+            setInterval(() => {
+                loadBackupList();
+            }, 30000);
+        }
+        
+        // 确保页面完全加载后再初始化
+        if (document.readyState === 'complete') {
+            initPage();
+        } else {
+            window.addEventListener('load', initPage);
+        }
 
         // 处理 URL hash 跳转（从其他页面点击新版本徽章跳转过来时）
         if (window.location.hash === '#update-section') {
