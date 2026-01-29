@@ -1,0 +1,560 @@
+package api
+
+import (
+	"archive/tar"
+	"archive/zip"
+	"bufio"
+	"compress/gzip"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"sync"
+	"time"
+
+	"goemail/internal/config"
+
+	"github.com/gin-gonic/gin"
+	"github.com/minio/selfupdate"
+)
+
+// GitHub Release 结构
+type GitHubRelease struct {
+	TagName     string         `json:"tag_name"`
+	Name        string         `json:"name"`
+	Body        string         `json:"body"`
+	PublishedAt string         `json:"published_at"`
+	Assets      []GitHubAsset  `json:"assets"`
+}
+
+type GitHubAsset struct {
+	Name               string `json:"name"`
+	BrowserDownloadURL string `json:"browser_download_url"`
+	Size               int64  `json:"size"`
+}
+
+// UpdateInfo 更新信息
+type UpdateInfo struct {
+	HasUpdate      bool   `json:"has_update"`
+	CurrentVersion string `json:"current_version"`
+	LatestVersion  string `json:"latest_version"`
+	ReleaseNotes   string `json:"release_notes"`
+	PublishedAt    string `json:"published_at"`
+	DownloadURL    string `json:"download_url"`
+	DownloadSize   int64  `json:"download_size"`
+	FileName       string `json:"file_name"`
+	Platform       string `json:"platform"`
+}
+
+// UpdateStatus 更新状态
+type UpdateStatus struct {
+	Status        string `json:"status"` // idle, checking, downloading, extracting, applying, completed, failed
+	Progress      int    `json:"progress"`
+	Message       string `json:"message"`
+	Error         string `json:"error,omitempty"`
+	NeedsRestart  bool   `json:"needs_restart"`
+}
+
+var (
+	updateMutex   sync.Mutex
+	currentStatus = UpdateStatus{Status: "idle", Progress: 0, Message: "就绪"}
+)
+
+// GetUpdateInfoHandler 获取更新信息 (增强版)
+func GetUpdateInfoHandler(c *gin.Context) {
+	updateMutex.Lock()
+	currentStatus = UpdateStatus{Status: "checking", Progress: 0, Message: "正在检查更新..."}
+	updateMutex.Unlock()
+
+	// 获取 GitHub Release 信息
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Get("https://api.github.com/repos/1186258278/QingChenMail/releases/latest")
+	if err != nil {
+		setStatusError("无法连接到 GitHub: " + err.Error())
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "无法连接到更新服务器"})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		setStatusError("GitHub API 返回错误")
+		c.JSON(resp.StatusCode, gin.H{"error": "GitHub API 错误"})
+		return
+	}
+
+	var release GitHubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		setStatusError("解析版本信息失败")
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "解析版本信息失败"})
+		return
+	}
+
+	// 当前版本
+	currentVer := config.Version
+
+	// 检查是否有更新
+	hasUpdate := compareVersions(release.TagName, currentVer) > 0
+
+	// 查找适合当前平台的下载包
+	downloadURL, fileName, fileSize := findPlatformAsset(release.Assets)
+
+	info := UpdateInfo{
+		HasUpdate:      hasUpdate,
+		CurrentVersion: currentVer,
+		LatestVersion:  release.TagName,
+		ReleaseNotes:   release.Body,
+		PublishedAt:    release.PublishedAt,
+		DownloadURL:    downloadURL,
+		DownloadSize:   fileSize,
+		FileName:       fileName,
+		Platform:       fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
+	}
+
+	updateMutex.Lock()
+	currentStatus = UpdateStatus{Status: "idle", Progress: 100, Message: "检查完成"}
+	updateMutex.Unlock()
+
+	c.JSON(http.StatusOK, info)
+}
+
+// PerformUpdateHandler 执行在线更新
+func PerformUpdateHandler(c *gin.Context) {
+	updateMutex.Lock()
+	if currentStatus.Status == "downloading" || currentStatus.Status == "applying" {
+		updateMutex.Unlock()
+		c.JSON(http.StatusConflict, gin.H{"error": "更新正在进行中"})
+		return
+	}
+	currentStatus = UpdateStatus{Status: "downloading", Progress: 0, Message: "开始下载..."}
+	updateMutex.Unlock()
+
+	// 获取请求参数
+	var req struct {
+		DownloadURL string `json:"download_url"`
+		FileName    string `json:"file_name"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.DownloadURL == "" {
+		setStatusError("无效的更新请求")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的更新请求"})
+		return
+	}
+
+	// 异步执行更新
+	go func() {
+		if err := doUpdate(req.DownloadURL, req.FileName); err != nil {
+			setStatusError(err.Error())
+		}
+	}()
+
+	c.JSON(http.StatusOK, gin.H{"message": "更新已开始", "status": "downloading"})
+}
+
+// GetUpdateStatusHandler 获取更新状态
+func GetUpdateStatusHandler(c *gin.Context) {
+	updateMutex.Lock()
+	status := currentStatus
+	updateMutex.Unlock()
+	c.JSON(http.StatusOK, status)
+}
+
+// doUpdate 执行实际更新逻辑
+func doUpdate(downloadURL, fileName string) error {
+	// 1. 下载文件
+	setStatus("downloading", 10, "正在下载更新包...")
+
+	client := &http.Client{Timeout: 10 * time.Minute}
+	resp, err := client.Get(downloadURL)
+	if err != nil {
+		return fmt.Errorf("下载失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("下载失败: HTTP %d", resp.StatusCode)
+	}
+
+	// 创建临时目录
+	tempDir, err := os.MkdirTemp("", "goemail-update-*")
+	if err != nil {
+		return fmt.Errorf("创建临时目录失败: %w", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// 保存到临时文件
+	tempArchive := filepath.Join(tempDir, fileName)
+	outFile, err := os.Create(tempArchive)
+	if err != nil {
+		return fmt.Errorf("创建临时文件失败: %w", err)
+	}
+
+	// 带进度的下载
+	totalSize := resp.ContentLength
+	downloaded := int64(0)
+	reader := &progressReader{
+		reader: resp.Body,
+		onProgress: func(n int64) {
+			downloaded += n
+			if totalSize > 0 {
+				progress := int(float64(downloaded) / float64(totalSize) * 50) + 10 // 10-60%
+				setStatus("downloading", progress, fmt.Sprintf("正在下载... %.1f%%", float64(downloaded)/float64(totalSize)*100))
+			}
+		},
+	}
+
+	if _, err := io.Copy(outFile, reader); err != nil {
+		outFile.Close()
+		return fmt.Errorf("下载写入失败: %w", err)
+	}
+	outFile.Close()
+
+	setStatus("extracting", 60, "正在解压更新包...")
+
+	// 2. 解压文件
+	var binaryPath string
+	if strings.HasSuffix(fileName, ".tar.gz") {
+		binaryPath, err = extractTarGz(tempArchive, tempDir)
+	} else if strings.HasSuffix(fileName, ".zip") {
+		binaryPath, err = extractZip(tempArchive, tempDir)
+	} else {
+		return fmt.Errorf("不支持的压缩格式: %s", fileName)
+	}
+
+	if err != nil {
+		return fmt.Errorf("解压失败: %w", err)
+	}
+
+	if binaryPath == "" {
+		return fmt.Errorf("未找到可执行文件")
+	}
+
+	setStatus("applying", 80, "正在应用更新...")
+
+	// 3. 获取当前可执行文件路径
+	currentExe, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("获取当前程序路径失败: %w", err)
+	}
+	currentExe, err = filepath.EvalSymlinks(currentExe)
+	if err != nil {
+		return fmt.Errorf("解析程序路径失败: %w", err)
+	}
+
+	// 4. 备份当前版本
+	backupPath := currentExe + ".backup"
+	setStatus("applying", 85, "正在备份当前版本...")
+	
+	// 读取当前文件用于备份
+	currentData, err := os.ReadFile(currentExe)
+	if err != nil {
+		return fmt.Errorf("读取当前程序失败: %w", err)
+	}
+	if err := os.WriteFile(backupPath, currentData, 0755); err != nil {
+		return fmt.Errorf("备份失败: %w", err)
+	}
+
+	// 5. 使用 selfupdate 应用更新
+	setStatus("applying", 90, "正在替换程序文件...")
+
+	newBinary, err := os.Open(binaryPath)
+	if err != nil {
+		return fmt.Errorf("打开新版本文件失败: %w", err)
+	}
+	defer newBinary.Close()
+
+	err = selfupdate.Apply(newBinary, selfupdate.Options{})
+	if err != nil {
+		// 回滚
+		if rollbackErr := selfupdate.RollbackError(err); rollbackErr != nil {
+			return fmt.Errorf("更新失败且回滚失败: %w, rollback: %v", err, rollbackErr)
+		}
+		return fmt.Errorf("更新失败 (已回滚): %w", err)
+	}
+
+	setStatus("completed", 100, "更新完成！请重启服务以应用新版本。")
+	updateMutex.Lock()
+	currentStatus.NeedsRestart = true
+	updateMutex.Unlock()
+
+	return nil
+}
+
+// progressReader 带进度回调的 Reader
+type progressReader struct {
+	reader     io.Reader
+	onProgress func(int64)
+}
+
+func (pr *progressReader) Read(p []byte) (int, error) {
+	n, err := pr.reader.Read(p)
+	if n > 0 && pr.onProgress != nil {
+		pr.onProgress(int64(n))
+	}
+	return n, err
+}
+
+// extractTarGz 解压 tar.gz 文件
+func extractTarGz(archivePath, destDir string) (string, error) {
+	file, err := os.Open(archivePath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	gzr, err := gzip.NewReader(file)
+	if err != nil {
+		return "", err
+	}
+	defer gzr.Close()
+
+	tr := tar.NewReader(gzr)
+	var binaryPath string
+
+	for {
+		header, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+
+		target := filepath.Join(destDir, header.Name)
+
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(target, 0755); err != nil {
+				return "", err
+			}
+		case tar.TypeReg:
+			// 查找 goemail 可执行文件
+			baseName := filepath.Base(header.Name)
+			if baseName == "goemail" || baseName == "goemail.exe" {
+				outFile, err := os.Create(target)
+				if err != nil {
+					return "", err
+				}
+				if _, err := io.Copy(outFile, tr); err != nil {
+					outFile.Close()
+					return "", err
+				}
+				outFile.Close()
+				os.Chmod(target, 0755)
+				binaryPath = target
+			}
+		}
+	}
+
+	return binaryPath, nil
+}
+
+// extractZip 解压 zip 文件
+func extractZip(archivePath, destDir string) (string, error) {
+	r, err := zip.OpenReader(archivePath)
+	if err != nil {
+		return "", err
+	}
+	defer r.Close()
+
+	var binaryPath string
+
+	for _, f := range r.File {
+		target := filepath.Join(destDir, f.Name)
+
+		if f.FileInfo().IsDir() {
+			os.MkdirAll(target, 0755)
+			continue
+		}
+
+		// 查找 goemail 可执行文件
+		baseName := filepath.Base(f.Name)
+		if baseName == "goemail" || baseName == "goemail.exe" {
+			rc, err := f.Open()
+			if err != nil {
+				return "", err
+			}
+
+			outFile, err := os.Create(target)
+			if err != nil {
+				rc.Close()
+				return "", err
+			}
+
+			_, err = io.Copy(outFile, rc)
+			outFile.Close()
+			rc.Close()
+
+			if err != nil {
+				return "", err
+			}
+			os.Chmod(target, 0755)
+			binaryPath = target
+		}
+	}
+
+	return binaryPath, nil
+}
+
+// findPlatformAsset 查找当前平台对应的下载包
+func findPlatformAsset(assets []GitHubAsset) (downloadURL, fileName string, size int64) {
+	goos := runtime.GOOS
+	goarch := runtime.GOARCH
+
+	// 构建期望的文件名模式
+	var expectedPatterns []string
+	switch goos {
+	case "linux":
+		if goarch == "amd64" {
+			expectedPatterns = []string{"Linux_x86_64.tar.gz", "linux_amd64.tar.gz"}
+		} else if goarch == "arm64" {
+			expectedPatterns = []string{"Linux_arm64.tar.gz", "linux_arm64.tar.gz"}
+		}
+	case "darwin":
+		if goarch == "amd64" {
+			expectedPatterns = []string{"Darwin_x86_64.tar.gz", "darwin_amd64.tar.gz"}
+		} else if goarch == "arm64" {
+			expectedPatterns = []string{"Darwin_arm64.tar.gz", "darwin_arm64.tar.gz"}
+		}
+	case "windows":
+		if goarch == "amd64" {
+			expectedPatterns = []string{"Windows_x86_64.zip", "windows_amd64.zip"}
+		}
+	}
+
+	for _, asset := range assets {
+		for _, pattern := range expectedPatterns {
+			if strings.Contains(asset.Name, pattern) || strings.HasSuffix(asset.Name, pattern) {
+				return asset.BrowserDownloadURL, asset.Name, asset.Size
+			}
+		}
+	}
+
+	// 如果没有精确匹配，尝试模糊匹配
+	for _, asset := range assets {
+		name := strings.ToLower(asset.Name)
+		if strings.Contains(name, goos) && strings.Contains(name, goarch) {
+			return asset.BrowserDownloadURL, asset.Name, asset.Size
+		}
+		// x86_64 等同于 amd64
+		if goarch == "amd64" && strings.Contains(name, goos) && strings.Contains(name, "x86_64") {
+			return asset.BrowserDownloadURL, asset.Name, asset.Size
+		}
+	}
+
+	return "", "", 0
+}
+
+// compareVersions 比较版本号 (返回: 1 if v1 > v2, -1 if v1 < v2, 0 if equal)
+func compareVersions(v1, v2 string) int {
+	// 移除 'v' 前缀
+	v1 = strings.TrimPrefix(v1, "v")
+	v2 = strings.TrimPrefix(v2, "v")
+
+	parts1 := strings.Split(v1, ".")
+	parts2 := strings.Split(v2, ".")
+
+	maxLen := len(parts1)
+	if len(parts2) > maxLen {
+		maxLen = len(parts2)
+	}
+
+	for i := 0; i < maxLen; i++ {
+		var n1, n2 int
+		if i < len(parts1) {
+			fmt.Sscanf(parts1[i], "%d", &n1)
+		}
+		if i < len(parts2) {
+			fmt.Sscanf(parts2[i], "%d", &n2)
+		}
+
+		if n1 > n2 {
+			return 1
+		}
+		if n1 < n2 {
+			return -1
+		}
+	}
+
+	return 0
+}
+
+// setStatus 设置更新状态
+func setStatus(status string, progress int, message string) {
+	updateMutex.Lock()
+	currentStatus.Status = status
+	currentStatus.Progress = progress
+	currentStatus.Message = message
+	updateMutex.Unlock()
+}
+
+// setStatusError 设置错误状态
+func setStatusError(errMsg string) {
+	updateMutex.Lock()
+	currentStatus.Status = "failed"
+	currentStatus.Error = errMsg
+	currentStatus.Message = "更新失败"
+	updateMutex.Unlock()
+}
+
+// GetChecksumsHandler 获取并验证 checksum (可选，用于高级验证)
+func GetChecksumsHandler(c *gin.Context) {
+	version := c.Query("version")
+	if version == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "缺少版本参数"})
+		return
+	}
+
+	// 下载 checksums.txt
+	url := fmt.Sprintf("https://github.com/1186258278/QingChenMail/releases/download/%s/checksums.txt", version)
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "无法获取校验文件"})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		c.JSON(resp.StatusCode, gin.H{"error": "校验文件不存在"})
+		return
+	}
+
+	// 解析 checksums
+	checksums := make(map[string]string)
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		parts := strings.Fields(line)
+		if len(parts) == 2 {
+			checksums[parts[1]] = parts[0]
+		}
+	}
+
+	c.JSON(http.StatusOK, checksums)
+}
+
+// verifyChecksum 验证文件校验和
+func verifyChecksum(filePath, expectedChecksum string) error {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	hasher := sha256.New()
+	if _, err := io.Copy(hasher, file); err != nil {
+		return err
+	}
+
+	actualChecksum := hex.EncodeToString(hasher.Sum(nil))
+	if actualChecksum != expectedChecksum {
+		return fmt.Errorf("校验和不匹配: 期望 %s, 实际 %s", expectedChecksum, actualChecksum)
+	}
+
+	return nil
+}

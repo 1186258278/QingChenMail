@@ -304,7 +304,8 @@
                 </div>
 
                 <div class="pt-4 space-y-3">
-                    <button type="submit" class="w-full bg-orange-600 text-white font-bold py-2.5 rounded-lg hover:bg-orange-700 transition shadow-md">
+                    <button type="submit" class="w-full font-bold py-2.5 rounded-lg transition shadow-md flex items-center justify-center" style="background-color: #ea580c; color: white;">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
                         <span data-i18n="settings.cleanup.save_btn">保存清理配置</span>
                     </button>
                     <button type="button" onclick="runCleanup()" class="w-full bg-red-50 text-red-600 border border-red-200 font-bold py-2.5 rounded-lg hover:bg-red-100 transition flex items-center justify-center">
@@ -411,6 +412,72 @@
                     <span data-i18n="settings.sec.jwt_btn">重置并强制下线</span>
                 </button>
             </div>
+        </div>
+
+        <!-- 系统更新 -->
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h3 class="font-bold text-lg text-gray-800 mb-6 flex items-center">
+                <span class="bg-cyan-100 text-cyan-600 p-1.5 rounded-lg mr-3">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                </span>
+                <span data-i18n="settings.update.title">系统更新</span>
+            </h3>
+
+            <!-- 版本信息 -->
+            <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-5">
+                <div class="grid grid-cols-2 gap-3 text-sm">
+                    <div class="flex justify-between">
+                        <span data-i18n="settings.update.current_ver">当前版本:</span>
+                        <span id="update-current-ver" class="font-mono font-medium text-gray-700">-</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span data-i18n="settings.update.latest_ver">最新版本:</span>
+                        <span id="update-latest-ver" class="font-mono font-medium text-gray-700">-</span>
+                    </div>
+                    <div class="flex justify-between col-span-2">
+                        <span data-i18n="settings.update.platform">运行平台:</span>
+                        <span id="update-platform" class="font-mono font-medium text-gray-500">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 更新状态 -->
+            <div id="update-status-box" class="hidden mb-5">
+                <div class="flex items-center mb-2">
+                    <div id="update-status-icon" class="w-5 h-5 mr-2">
+                        <!-- 动态图标 -->
+                    </div>
+                    <span id="update-status-text" class="text-sm font-medium text-gray-700">准备中...</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                    <div id="update-progress-bar" class="bg-cyan-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- 更新日志 (折叠) -->
+            <div id="update-release-notes" class="hidden mb-5">
+                <button type="button" onclick="toggleReleaseNotes()" class="flex items-center text-sm text-gray-600 hover:text-gray-800 mb-2">
+                    <svg id="release-notes-icon" class="w-4 h-4 mr-1 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                    <span data-i18n="settings.update.release_notes">更新日志</span>
+                </button>
+                <div id="release-notes-content" class="hidden bg-gray-50 p-3 rounded-lg border border-gray-200 text-xs text-gray-600 max-h-40 overflow-y-auto whitespace-pre-wrap"></div>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="space-y-3">
+                <button type="button" onclick="checkForUpdate()" id="btn-check-update" class="w-full font-bold py-2.5 rounded-lg transition shadow-md flex items-center justify-center" style="background-color: #0891b2; color: white;">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    <span data-i18n="settings.update.check_btn">检查更新</span>
+                </button>
+                <button type="button" onclick="performUpdate()" id="btn-perform-update" disabled class="w-full bg-gray-100 text-gray-400 font-bold py-2.5 rounded-lg transition flex items-center justify-center cursor-not-allowed">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                    <span data-i18n="settings.update.download_btn">下载并安装</span>
+                </button>
+            </div>
+
+            <p class="text-xs text-gray-400 mt-4" data-i18n="settings.update.hint">
+                更新后需要手动重启服务才能生效。建议在更新前进行数据备份。
+            </p>
         </div>
 
     </div>
@@ -895,6 +962,191 @@
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
+
+        // --- 系统更新相关函数 ---
+        let updateInfo = null;
+        let updatePolling = null;
+
+        async function loadUpdateInfo() {
+            try {
+                const ver = await request('/config/version');
+                document.getElementById('update-current-ver').textContent = ver.version || '-';
+            } catch (e) {
+                console.error('加载版本信息失败:', e);
+            }
+        }
+
+        async function checkForUpdate() {
+            const btn = document.getElementById('btn-check-update');
+            const originalHTML = btn.innerHTML;
+            
+            try {
+                btn.disabled = true;
+                btn.innerHTML = `<svg class="w-4 h-4 mr-2 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span>${I18n.t('settings.update.checking') || '检查中...'}</span>`;
+
+                updateInfo = await request('/config/update-info');
+
+                // 更新显示
+                document.getElementById('update-current-ver').textContent = updateInfo.current_version || '-';
+                document.getElementById('update-latest-ver').textContent = updateInfo.latest_version || '-';
+                document.getElementById('update-platform').textContent = updateInfo.platform || '-';
+
+                const latestEl = document.getElementById('update-latest-ver');
+                const updateBtn = document.getElementById('btn-perform-update');
+
+                if (updateInfo.has_update) {
+                    latestEl.classList.remove('text-gray-700');
+                    latestEl.classList.add('text-green-600');
+                    
+                    // 启用更新按钮
+                    updateBtn.disabled = false;
+                    updateBtn.classList.remove('bg-gray-100', 'text-gray-400', 'cursor-not-allowed');
+                    updateBtn.classList.add('bg-green-600', 'text-white', 'hover:bg-green-700');
+
+                    // 显示更新日志
+                    if (updateInfo.release_notes) {
+                        document.getElementById('update-release-notes').classList.remove('hidden');
+                        document.getElementById('release-notes-content').textContent = updateInfo.release_notes;
+                    }
+
+                    showToast(I18n.t('settings.toast.update_available') || `发现新版本: ${updateInfo.latest_version}`, 'success');
+                } else {
+                    latestEl.classList.remove('text-green-600');
+                    latestEl.classList.add('text-gray-700');
+                    updateBtn.disabled = true;
+                    updateBtn.classList.remove('bg-green-600', 'text-white', 'hover:bg-green-700');
+                    updateBtn.classList.add('bg-gray-100', 'text-gray-400', 'cursor-not-allowed');
+                    document.getElementById('update-release-notes').classList.add('hidden');
+
+                    showToast(I18n.t('settings.toast.already_latest') || '已是最新版本');
+                }
+
+            } catch (e) {
+                showToast(I18n.t('settings.toast.check_failed') || '检查更新失败', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+            }
+        }
+
+        function toggleReleaseNotes() {
+            const content = document.getElementById('release-notes-content');
+            const icon = document.getElementById('release-notes-icon');
+            if (content.classList.contains('hidden')) {
+                content.classList.remove('hidden');
+                icon.classList.add('rotate-90');
+            } else {
+                content.classList.add('hidden');
+                icon.classList.remove('rotate-90');
+            }
+        }
+
+        async function performUpdate() {
+            if (!updateInfo || !updateInfo.download_url) {
+                showToast(I18n.t('settings.toast.no_update_info') || '请先检查更新', 'error');
+                return;
+            }
+
+            const confirmMsg = I18n.t('settings.alert.update_confirm') || 
+                `确定要更新到 ${updateInfo.latest_version} 吗？\n\n更新完成后需要手动重启服务。\n建议先进行数据备份。`;
+            if (!confirm(confirmMsg)) return;
+
+            const checkBtn = document.getElementById('btn-check-update');
+            const updateBtn = document.getElementById('btn-perform-update');
+
+            try {
+                checkBtn.disabled = true;
+                updateBtn.disabled = true;
+                updateBtn.innerHTML = `<svg class="w-4 h-4 mr-2 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span>${I18n.t('settings.update.updating') || '更新中...'}</span>`;
+
+                // 显示状态框
+                document.getElementById('update-status-box').classList.remove('hidden');
+
+                // 发起更新请求
+                await request('/config/update', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        download_url: updateInfo.download_url,
+                        file_name: updateInfo.file_name
+                    })
+                });
+
+                // 开始轮询状态
+                startUpdatePolling();
+
+            } catch (e) {
+                showToast(I18n.t('settings.toast.update_failed') || '更新失败', 'error');
+                checkBtn.disabled = false;
+                resetUpdateButton();
+            }
+        }
+
+        function startUpdatePolling() {
+            if (updatePolling) clearInterval(updatePolling);
+            
+            updatePolling = setInterval(async () => {
+                try {
+                    const status = await request('/config/update-status');
+                    updateStatusUI(status);
+
+                    if (status.status === 'completed' || status.status === 'failed') {
+                        clearInterval(updatePolling);
+                        updatePolling = null;
+                        document.getElementById('btn-check-update').disabled = false;
+
+                        if (status.status === 'completed') {
+                            showToast(I18n.t('settings.toast.update_success') || '更新成功！请重启服务。', 'success');
+                            alert(I18n.t('settings.alert.restart_required') || '更新已完成！\n\n请手动重启服务以应用新版本：\n\n1. 停止当前服务\n2. 启动新版本程序\n\nLinux: systemctl restart goemail 或 ./goemail\nWindows: 重新运行 goemail.exe');
+                        } else if (status.status === 'failed') {
+                            showToast(status.error || I18n.t('settings.toast.update_failed') || '更新失败', 'error');
+                        }
+                        resetUpdateButton();
+                    }
+                } catch (e) {
+                    console.error('获取更新状态失败:', e);
+                }
+            }, 1000);
+        }
+
+        function updateStatusUI(status) {
+            const statusText = document.getElementById('update-status-text');
+            const progressBar = document.getElementById('update-progress-bar');
+            const statusIcon = document.getElementById('update-status-icon');
+
+            statusText.textContent = status.message || '处理中...';
+            progressBar.style.width = `${status.progress}%`;
+
+            // 更新图标
+            if (status.status === 'completed') {
+                statusIcon.innerHTML = `<svg class="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
+                progressBar.classList.remove('bg-cyan-600');
+                progressBar.classList.add('bg-green-500');
+            } else if (status.status === 'failed') {
+                statusIcon.innerHTML = `<svg class="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`;
+                progressBar.classList.remove('bg-cyan-600');
+                progressBar.classList.add('bg-red-500');
+            } else {
+                statusIcon.innerHTML = `<svg class="w-5 h-5 text-cyan-500 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
+            }
+        }
+
+        function resetUpdateButton() {
+            const btn = document.getElementById('btn-perform-update');
+            btn.innerHTML = `<svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg><span>${I18n.t('settings.update.download_btn') || '下载并安装'}</span>`;
+            
+            if (updateInfo && updateInfo.has_update) {
+                btn.disabled = false;
+                btn.classList.remove('bg-gray-100', 'text-gray-400', 'cursor-not-allowed');
+                btn.classList.add('bg-green-600', 'text-white', 'hover:bg-green-700');
+            } else {
+                btn.disabled = true;
+                btn.classList.remove('bg-green-600', 'text-white', 'hover:bg-green-700');
+                btn.classList.add('bg-gray-100', 'text-gray-400', 'cursor-not-allowed');
+            }
+        }
+
+        // 页面加载时获取当前版本
+        loadUpdateInfo();
     </script>
 </body>
 </html>

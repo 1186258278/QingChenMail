@@ -126,6 +126,9 @@ func main() {
 			authorized.GET("/config", api.GetConfigHandler)
 			authorized.GET("/config/version", api.GetVersionHandler) // 新增
 			authorized.GET("/config/check-update", api.CheckUpdateHandler) // 新增：版本检查代理
+			authorized.GET("/config/update-info", api.GetUpdateInfoHandler)   // 获取更新详情
+			authorized.POST("/config/update", api.PerformUpdateHandler)       // 执行在线更新
+			authorized.GET("/config/update-status", api.GetUpdateStatusHandler) // 获取更新状态
 			authorized.POST("/config", api.UpdateConfigHandler)
 			authorized.POST("/config/test-port", api.TestPortHandler)
 			authorized.POST("/config/kill-process", api.KillProcessHandler) // 新增

@@ -42,6 +42,51 @@ This section guides you through submitting an enhancement suggestion for QingChe
 5.  **Push** your changes to your fork.
 6.  **Submit a Pull Request** to the `main` branch of the original repository.
 
+## Version Management (版本管理)
+
+### Version Number Location (版本号位置)
+
+The version number is defined in `internal/config/config.go`:
+
+```go
+const Version = "v1.1.0"
+```
+
+### How Version Detection Works (版本检测原理)
+
+1. **Current Version**: Read from `config.Version` constant
+2. **Latest Version**: Fetched from GitHub API: `https://api.github.com/repos/1186258278/QingChenMail/releases/latest`
+3. **Comparison**: Semantic versioning comparison (e.g., `v1.2.0` > `v1.1.0`)
+
+### Releasing a New Version (发布新版本)
+
+1. **Update version number** in `internal/config/config.go`:
+   ```go
+   const Version = "v1.2.0"  // Change this
+   ```
+
+2. **Commit and push** your changes
+
+3. **Create a Git tag** matching the version:
+   ```bash
+   git tag v1.2.0
+   git push origin v1.2.0
+   ```
+
+4. **GitHub Actions** will automatically:
+   - Build binaries for Linux/macOS/Windows (amd64/arm64)
+   - Create a GitHub Release with the tag
+   - Upload compiled binaries and checksums
+
+### Important Notes (注意事项)
+
+- Version format must be `vX.Y.Z` (e.g., `v1.2.0`)
+- Tag name must match the `Version` constant exactly
+- GoReleaser config is in `.goreleaser.yaml`
+- Online update feature downloads from GitHub Releases
+
+---
+
 ## Styleguides
 
 ### Commit Messages
