@@ -1,6 +1,6 @@
 /**
  * 晴辰云邮 - 全局加载动画
- * 邮件飞行特效加载器
+ * 信封开启 -> 纸飞机飞出 动效
  */
 
 (function() {
@@ -8,10 +8,10 @@
 
     // 配置
     const CONFIG = {
-        minDisplayTime: 600,    // 最小显示时间 (ms)
-        fadeOutDuration: 400,   // 淡出动画时长 (ms)
+        minDisplayTime: 500,    // 最小显示时间 (ms)
+        fadeOutDuration: 350,   // 淡出动画时长 (ms)
         brandName: '晴辰云邮',
-        brandSubtitle: 'QingChen Mail'
+        brandSubtitle: 'QINGCHEN MAIL'
     };
 
     // 创建加载器 DOM
@@ -21,25 +21,23 @@
         loader.innerHTML = `
             <div class="qc-loader-backdrop"></div>
             <div class="qc-loader-content">
-                <!-- 邮件飞行动画 -->
-                <div class="qc-mail-container">
-                    <!-- 邮件轨迹 -->
-                    <div class="qc-mail-trail"></div>
-                    <div class="qc-mail-trail qc-mail-trail-2"></div>
-                    <div class="qc-mail-trail qc-mail-trail-3"></div>
-                    
-                    <!-- 邮件图标 -->
-                    <div class="qc-mail-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="2" y="4" width="20" height="16" rx="2"/>
-                            <path d="M22 6L12 13L2 6"/>
-                        </svg>
-                    </div>
-                    
-                    <!-- 发送粒子效果 -->
-                    <div class="qc-particles">
-                        <span></span><span></span><span></span>
-                        <span></span><span></span><span></span>
+                <!-- 邮件动画容器 -->
+                <div class="qc-envelope-scene">
+                    <!-- 信封主体 -->
+                    <div class="qc-envelope">
+                        <!-- 信封盖子 -->
+                        <div class="qc-envelope-flap"></div>
+                        <!-- 信封主体 -->
+                        <div class="qc-envelope-body">
+                            <div class="qc-envelope-front"></div>
+                        </div>
+                        <!-- 纸飞机 -->
+                        <div class="qc-paper-plane">
+                            <svg viewBox="0 0 24 24" fill="none">
+                                <path d="M22 2L11 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
                     </div>
                 </div>
                 
@@ -47,11 +45,7 @@
                 <div class="qc-brand">
                     <div class="qc-brand-name">${CONFIG.brandName}</div>
                     <div class="qc-brand-subtitle">${CONFIG.brandSubtitle}</div>
-                </div>
-                
-                <!-- 加载进度条 -->
-                <div class="qc-progress">
-                    <div class="qc-progress-bar"></div>
+                    <div class="qc-brand-line"></div>
                 </div>
             </div>
         `;
@@ -75,6 +69,7 @@
                 display: flex;
                 align-items: center;
                 justify-content: center;
+                opacity: 1;
                 transition: opacity ${CONFIG.fadeOutDuration}ms ease-out;
             }
             
@@ -83,17 +78,11 @@
                 pointer-events: none;
             }
             
+            /* 背景 - 浅色渐变 */
             .qc-loader-backdrop {
                 position: absolute;
                 inset: 0;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #6B8DD6 100%);
-                background-size: 400% 400%;
-                animation: qc-gradient 8s ease infinite;
-            }
-            
-            @keyframes qc-gradient {
-                0%, 100% { background-position: 0% 50%; }
-                50% { background-position: 100% 50%; }
+                background: linear-gradient(145deg, #667eea 0%, #764ba2 50%, #6B8DD6 100%);
             }
             
             .qc-loader-content {
@@ -101,168 +90,164 @@
                 display: flex;
                 flex-direction: column;
                 align-items: center;
-                color: white;
+                color: #334155;
             }
             
-            /* 邮件容器 */
-            .qc-mail-container {
-                position: relative;
+            /* ========== 信封场景 ========== */
+            .qc-envelope-scene {
                 width: 120px;
-                height: 120px;
-                margin-bottom: 32px;
+                height: 100px;
+                perspective: 800px;
+                margin-bottom: 36px;
             }
             
-            /* 邮件图标 */
-            .qc-mail-icon {
+            .qc-envelope {
+                position: relative;
+                width: 100%;
+                height: 100%;
+                transform-style: preserve-3d;
+            }
+            
+            /* 信封主体 */
+            .qc-envelope-body {
+                position: absolute;
+                bottom: 0;
+                width: 100%;
+                height: 70px;
+                background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
+                border-radius: 4px 4px 8px 8px;
+                box-shadow: 0 8px 32px rgba(102, 126, 234, 0.25), 0 2px 8px rgba(0,0,0,0.08);
+                overflow: hidden;
+            }
+            
+            .qc-envelope-front {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                height: 40px;
+                background: linear-gradient(to bottom, transparent 0%, rgba(102, 126, 234, 0.08) 100%);
+                clip-path: polygon(0 100%, 50% 30%, 100% 100%);
+            }
+            
+            /* 信封盖子 */
+            .qc-envelope-flap {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 50px;
+                background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+                clip-path: polygon(0 0, 50% 100%, 100% 0);
+                transform-origin: top center;
+                transform: rotateX(0deg);
+                animation: qc-flap-open 2.5s ease-in-out infinite;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            }
+            
+            @keyframes qc-flap-open {
+                0%, 15% {
+                    transform: rotateX(0deg);
+                }
+                30%, 55% {
+                    transform: rotateX(-160deg);
+                }
+                70%, 100% {
+                    transform: rotateX(0deg);
+                }
+            }
+            
+            /* 纸飞机 */
+            .qc-paper-plane {
                 position: absolute;
                 top: 50%;
                 left: 50%;
-                transform: translate(-50%, -50%);
-                width: 56px;
-                height: 56px;
-                color: white;
-                animation: qc-mail-fly 2s ease-in-out infinite;
-                filter: drop-shadow(0 4px 12px rgba(0,0,0,0.2));
+                width: 36px;
+                height: 36px;
+                color: #667eea;
+                transform: translate(-50%, -50%) scale(0) rotate(-45deg);
+                animation: qc-plane-fly 2.5s ease-in-out infinite;
+                filter: drop-shadow(0 2px 8px rgba(102, 126, 234, 0.4));
             }
             
-            .qc-mail-icon svg {
+            .qc-paper-plane svg {
                 width: 100%;
                 height: 100%;
             }
             
-            @keyframes qc-mail-fly {
-                0%, 100% {
-                    transform: translate(-50%, -50%) translateY(0) rotate(-5deg);
-                }
-                25% {
-                    transform: translate(-50%, -50%) translateX(8px) translateY(-12px) rotate(0deg);
-                }
-                50% {
-                    transform: translate(-50%, -50%) translateY(-6px) rotate(5deg);
-                }
-                75% {
-                    transform: translate(-50%, -50%) translateX(-8px) translateY(-12px) rotate(0deg);
-                }
-            }
-            
-            /* 邮件轨迹 */
-            .qc-mail-trail {
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                width: 80px;
-                height: 3px;
-                background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent);
-                border-radius: 2px;
-                transform: translate(-80px, -50%) rotate(-15deg);
-                animation: qc-trail 2s ease-in-out infinite;
-                opacity: 0;
-            }
-            
-            .qc-mail-trail-2 {
-                width: 60px;
-                animation-delay: 0.1s;
-                transform: translate(-70px, calc(-50% + 8px)) rotate(-10deg);
-            }
-            
-            .qc-mail-trail-3 {
-                width: 40px;
-                animation-delay: 0.2s;
-                transform: translate(-60px, calc(-50% + 16px)) rotate(-5deg);
-            }
-            
-            @keyframes qc-trail {
-                0%, 100% { opacity: 0; transform: translate(-80px, -50%) rotate(-15deg) scaleX(0); }
-                25% { opacity: 0.8; transform: translate(-60px, -50%) rotate(-10deg) scaleX(1); }
-                50% { opacity: 0.4; transform: translate(-40px, -50%) rotate(-5deg) scaleX(0.6); }
-                75% { opacity: 0; transform: translate(-20px, -50%) rotate(0deg) scaleX(0); }
-            }
-            
-            /* 粒子效果 */
-            .qc-particles {
-                position: absolute;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                pointer-events: none;
-            }
-            
-            .qc-particles span {
-                position: absolute;
-                width: 6px;
-                height: 6px;
-                background: rgba(255,255,255,0.8);
-                border-radius: 50%;
-                animation: qc-particle 2s ease-out infinite;
-            }
-            
-            .qc-particles span:nth-child(1) { animation-delay: 0s; }
-            .qc-particles span:nth-child(2) { animation-delay: 0.15s; }
-            .qc-particles span:nth-child(3) { animation-delay: 0.3s; }
-            .qc-particles span:nth-child(4) { animation-delay: 0.45s; }
-            .qc-particles span:nth-child(5) { animation-delay: 0.6s; }
-            .qc-particles span:nth-child(6) { animation-delay: 0.75s; }
-            
-            @keyframes qc-particle {
-                0% {
+            @keyframes qc-plane-fly {
+                0%, 20% {
+                    transform: translate(-50%, -50%) scale(0) rotate(-45deg);
                     opacity: 0;
-                    transform: translate(20px, 0) scale(0);
                 }
-                20% {
+                30% {
+                    transform: translate(-50%, -50%) scale(1) rotate(-45deg);
                     opacity: 1;
-                    transform: translate(25px, -5px) scale(1);
                 }
-                100% {
+                45% {
+                    transform: translate(-50%, -80%) scale(1) rotate(-45deg);
+                    opacity: 1;
+                }
+                65% {
+                    transform: translate(100px, -150px) scale(0.6) rotate(-45deg);
                     opacity: 0;
-                    transform: translate(60px, -20px) scale(0);
+                }
+                66%, 100% {
+                    transform: translate(-50%, -50%) scale(0) rotate(-45deg);
+                    opacity: 0;
                 }
             }
             
-            /* 品牌信息 */
+            /* ========== 品牌信息 ========== */
             .qc-brand {
                 text-align: center;
-                margin-bottom: 24px;
+                color: white;
             }
             
             .qc-brand-name {
-                font-size: 24px;
-                font-weight: 700;
-                letter-spacing: 2px;
-                margin-bottom: 4px;
-                text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+                font-size: 22px;
+                font-weight: 600;
+                letter-spacing: 3px;
+                margin-bottom: 6px;
+                text-shadow: 0 2px 12px rgba(0,0,0,0.15);
             }
             
             .qc-brand-subtitle {
-                font-size: 12px;
+                font-size: 11px;
                 font-weight: 500;
-                opacity: 0.8;
-                letter-spacing: 4px;
-                text-transform: uppercase;
+                opacity: 0.85;
+                letter-spacing: 5px;
+                margin-bottom: 16px;
             }
             
-            /* 进度条 */
-            .qc-progress {
-                width: 160px;
-                height: 3px;
-                background: rgba(255,255,255,0.2);
-                border-radius: 2px;
+            /* 品牌线条动画 */
+            .qc-brand-line {
+                width: 80px;
+                height: 2px;
+                background: rgba(255,255,255,0.3);
+                border-radius: 1px;
+                margin: 0 auto;
+                position: relative;
                 overflow: hidden;
             }
             
-            .qc-progress-bar {
+            .qc-brand-line::after {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: -100%;
+                width: 100%;
                 height: 100%;
-                background: white;
-                border-radius: 2px;
-                animation: qc-progress 1.5s ease-in-out infinite;
+                background: linear-gradient(90deg, transparent, white, transparent);
+                animation: qc-line-shine 2s ease-in-out infinite;
             }
             
-            @keyframes qc-progress {
-                0% { width: 0%; margin-left: 0%; }
-                50% { width: 60%; margin-left: 20%; }
-                100% { width: 0%; margin-left: 100%; }
+            @keyframes qc-line-shine {
+                0% { left: -100%; }
+                50%, 100% { left: 100%; }
             }
             
-            /* 页面内容隐藏 */
+            /* ========== 页面状态控制 ========== */
             body.qc-loading > *:not(#qc-loader):not(script):not(style):not(link) {
                 visibility: hidden;
             }
@@ -277,7 +262,6 @@
     function show() {
         // 确保 body 存在
         if (!document.body) {
-            // 如果 body 还不存在，等待 DOMContentLoaded
             document.addEventListener('DOMContentLoaded', show);
             return;
         }
@@ -328,7 +312,7 @@
                 show();
                 setTimeout(() => {
                     window.location.href = link.href;
-                }, 200);
+                }, 150);
             }
         });
     }
