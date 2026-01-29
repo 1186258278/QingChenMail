@@ -296,12 +296,22 @@ func doUpdate(downloadURL, fileName string) error {
 	if err != nil {
 		return fmt.Errorf("获取当前程序路径失败: %w", err)
 	}
-	currentExe, err = filepath.EvalSymlinks(currentExe)
-	if err != nil {
-		return fmt.Errorf("解析程序路径失败: %w", err)
+	
+	// 尝试解析符号链接，如果失败则使用原路径
+	if resolved, err := filepath.EvalSymlinks(currentExe); err == nil {
+		currentExe = resolved
+	}
+	// 清理绝对路径
+	currentExe, _ = filepath.Abs(currentExe)
+
+	// 4. 清理可能存在的旧 .old 文件（selfupdate 遗留）
+	oldFile := currentExe + ".old"
+	if _, err := os.Stat(oldFile); err == nil {
+		os.Remove(oldFile)
+		fmt.Printf("[Update] 已清理旧备份文件: %s\n", oldFile)
 	}
 
-	// 4. 备份当前版本
+	// 5. 备份当前版本
 	backupPath := currentExe + ".backup"
 	setStatus("applying", 85, "正在备份当前版本...")
 	
@@ -314,7 +324,7 @@ func doUpdate(downloadURL, fileName string) error {
 		return fmt.Errorf("备份失败: %w", err)
 	}
 
-	// 5. 使用 selfupdate 应用更新
+	// 6. 使用 selfupdate 应用更新
 	setStatus("applying", 90, "正在替换程序文件...")
 
 	newBinary, err := os.Open(binaryPath)
@@ -323,7 +333,10 @@ func doUpdate(downloadURL, fileName string) error {
 	}
 	defer newBinary.Close()
 
-	err = selfupdate.Apply(newBinary, selfupdate.Options{})
+	// 指定目标路径，避免 selfupdate 自动检测出错
+	err = selfupdate.Apply(newBinary, selfupdate.Options{
+		TargetPath: currentExe,
+	})
 	if err != nil {
 		// 回滚
 		if rollbackErr := selfupdate.RollbackError(err); rollbackErr != nil {
