@@ -68,6 +68,49 @@ var (
 	currentStatus = UpdateStatus{Status: "idle", Progress: 0, Message: "就绪"}
 )
 
+// 全局版本缓存 - 用于快速返回版本检测结果
+var (
+	cachedUpdateInfo  *UpdateInfo
+	cachedUpdateTime  time.Time
+	cachedUpdateMutex sync.RWMutex
+)
+
+// updateCache 更新版本缓存
+func updateCache(info *UpdateInfo) {
+	cachedUpdateMutex.Lock()
+	defer cachedUpdateMutex.Unlock()
+	cachedUpdateInfo = info
+	cachedUpdateTime = time.Now()
+}
+
+// GetCachedUpdateHandler 获取缓存的版本信息（快速响应，不触发 GitHub 请求）
+func GetCachedUpdateHandler(c *gin.Context) {
+	cachedUpdateMutex.RLock()
+	defer cachedUpdateMutex.RUnlock()
+
+	if cachedUpdateInfo == nil {
+		// 缓存为空，返回基本信息
+		c.JSON(http.StatusOK, gin.H{
+			"has_update":      false,
+			"current_version": config.Version,
+			"cached":          false,
+			"message":         "缓存未初始化，请等待后台检测或手动检测",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"has_update":      cachedUpdateInfo.HasUpdate,
+		"current_version": cachedUpdateInfo.CurrentVersion,
+		"latest_version":  cachedUpdateInfo.LatestVersion,
+		"release_notes":   cachedUpdateInfo.ReleaseNotes,
+		"published_at":    cachedUpdateInfo.PublishedAt,
+		"download_url":    cachedUpdateInfo.DownloadURL,
+		"cached":          true,
+		"cached_at":       cachedUpdateTime.Format(time.RFC3339),
+	})
+}
+
 // GetUpdateInfoHandler 获取更新信息 (增强版)
 func GetUpdateInfoHandler(c *gin.Context) {
 	updateMutex.Lock()
@@ -117,6 +160,9 @@ func GetUpdateInfoHandler(c *gin.Context) {
 		FileName:       fileName,
 		Platform:       fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
 	}
+
+	// 更新全局缓存
+	updateCache(&info)
 
 	updateMutex.Lock()
 	currentStatus = UpdateStatus{Status: "idle", Progress: 100, Message: "检查完成"}
@@ -648,6 +694,44 @@ del "%%~f0"
 // ============================================
 
 var autoUpdateRunning bool
+var versionCacheRunning bool
+
+// StartVersionCacheUpdater 启动版本缓存更新后台任务（每60分钟检测一次）
+func StartVersionCacheUpdater() {
+	if versionCacheRunning {
+		return
+	}
+	versionCacheRunning = true
+
+	go func() {
+		// 启动时立即检测一次，填充缓存
+		fmt.Println("[VersionCache] 正在初始化版本缓存...")
+		if info, err := checkForUpdateInternal(); err == nil {
+			updateCache(info)
+			fmt.Printf("[VersionCache] 缓存已初始化: 当前 %s, 最新 %s\n", info.CurrentVersion, info.LatestVersion)
+		} else {
+			fmt.Printf("[VersionCache] 初始化失败: %v\n", err)
+		}
+
+		// 每 60 分钟检测一次
+		ticker := time.NewTicker(60 * time.Minute)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			fmt.Println("[VersionCache] 定时检测版本...")
+			if info, err := checkForUpdateInternal(); err == nil {
+				updateCache(info)
+				if info.HasUpdate {
+					fmt.Printf("[VersionCache] 发现新版本: %s -> %s\n", info.CurrentVersion, info.LatestVersion)
+				}
+			} else {
+				fmt.Printf("[VersionCache] 检测失败: %v\n", err)
+			}
+		}
+	}()
+
+	fmt.Println("[VersionCache] 版本缓存更新任务已启动（每60分钟检测）")
+}
 
 // StartAutoUpdateChecker 启动自动更新检测后台任务
 func StartAutoUpdateChecker() {
@@ -681,18 +765,23 @@ func StartAutoUpdateChecker() {
 				info, err := checkForUpdateInternal()
 				if err != nil {
 					fmt.Printf("[AutoUpdate] 检查更新失败: %v\n", err)
-				} else if info.HasUpdate {
-					fmt.Printf("[AutoUpdate] 发现新版本: %s -> %s\n", info.CurrentVersion, info.LatestVersion)
-					
-					// 执行自动更新
-					if err := doUpdate(info.DownloadURL, info.FileName); err != nil {
-						fmt.Printf("[AutoUpdate] 自动更新失败: %v\n", err)
-					} else {
-						fmt.Println("[AutoUpdate] 更新成功，正在重启...")
-						RestartSelf()
-					}
 				} else {
-					fmt.Println("[AutoUpdate] 当前已是最新版本")
+					// 同步更新缓存
+					updateCache(info)
+					
+					if info.HasUpdate {
+						fmt.Printf("[AutoUpdate] 发现新版本: %s -> %s\n", info.CurrentVersion, info.LatestVersion)
+						
+						// 执行自动更新
+						if err := doUpdate(info.DownloadURL, info.FileName); err != nil {
+							fmt.Printf("[AutoUpdate] 自动更新失败: %v\n", err)
+						} else {
+							fmt.Println("[AutoUpdate] 更新成功，正在重启...")
+							RestartSelf()
+						}
+					} else {
+						fmt.Println("[AutoUpdate] 当前已是最新版本")
+					}
 				}
 			}
 

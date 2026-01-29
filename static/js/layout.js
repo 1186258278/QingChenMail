@@ -51,6 +51,15 @@ document.addEventListener('DOMContentLoaded', () => {
         </nav>
         
         <div class="p-4 border-t border-gray-100 flex flex-col space-y-4">
+            <!-- 新版本提示徽章 (默认隐藏) -->
+            <div id="update-badge" class="hidden">
+                <a href="/dashboard/settings.html#update-section" class="flex items-center w-full px-4 py-3 text-sm font-medium bg-gradient-to-r from-green-50 to-emerald-50 text-green-700 hover:from-green-100 hover:to-emerald-100 rounded-2xl transition-all group border border-green-200">
+                    <svg class="w-5 h-5 mr-3 text-green-500 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    <span class="flex-1" data-i18n="common.new_version_available">有新版本可用</span>
+                    <span id="update-badge-version" class="text-xs font-mono bg-green-200 text-green-800 px-2 py-0.5 rounded-full"></span>
+                </a>
+            </div>
+
             <!-- 退出按钮 (左对齐，与上方菜单一致) -->
             <button onclick="Auth.logout()" class="flex items-center w-full px-4 py-3 text-sm font-medium text-gray-500 hover:bg-red-50 hover:text-red-600 rounded-2xl transition-colors group">
                 <svg class="w-5 h-5 mr-3 text-gray-400 group-hover:text-red-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
@@ -115,44 +124,46 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function checkVersion() {
     try {
-        // 1. 获取当前版本
         const token = localStorage.getItem('token');
         if (!token) return; // 未登录不检测
 
-        const res = await fetch('/api/v1/config/version', {
+        // 使用缓存 API 快速获取版本信息（后端每60分钟自动刷新缓存）
+        const res = await fetch('/api/v1/config/cached-update', {
             headers: { 'Authorization': 'Bearer ' + token }
         });
+        
         if (!res.ok) return;
         
         const data = await res.json();
-        const currentVer = data.version; // e.g. "v1.0.3"
+        const currentVer = data.current_version;
+        const latestVer = data.latest_version;
+        const hasUpdate = data.has_update;
         
-        const el = document.getElementById('version-info');
-        if (el) el.innerText = currentVer;
+        // 显示当前版本号
+        const versionEl = document.getElementById('version-info');
+        if (versionEl) {
+            if (hasUpdate && latestVer) {
+                // 有新版本时显示升级提示
+                versionEl.innerHTML = `<span class="mr-1">${currentVer}</span><span class="text-green-500 font-bold animate-pulse">↑</span>`;
+                versionEl.setAttribute('title', `新版本: ${latestVer}`);
+                versionEl.onclick = (e) => {
+                    e.stopPropagation();
+                    window.location.href = '/dashboard/settings.html#update-section';
+                };
+            } else {
+                versionEl.innerText = currentVer;
+            }
+        }
 
-        // 2. 检查 GitHub 最新版本
-        // 使用后端代理以避免 GitHub API 速率限制 (Rate Limiting) 并利用缓存
-        // 需要传递 Token 才能通过后端鉴权
-        const ghRes = await fetch('/api/v1/config/check-update', {
-            headers: { 'Authorization': 'Bearer ' + token }
-        });
-        
-        if (ghRes.ok) {
-            const ghData = await ghRes.json();
-            const latestVer = ghData.tag_name; // e.g. "v1.0.4"
-            
-            // 简单字符串比较，或者语义化版本比较
-            // 假设都是 vX.Y.Z 格式
-            if (latestVer && latestVer !== currentVer) {
-                if (el) {
-                    // 防止事件冒泡冲突，这里直接放链接
-                    el.innerHTML = `<span class="mr-1">${currentVer}</span><span class="text-red-500 font-bold animate-pulse">↑</span>`;
-                    el.setAttribute('title', `New version available: ${latestVer}`);
-                    el.onclick = (e) => {
-                        e.stopPropagation();
-                        window.open(ghData.html_url, '_blank');
-                    };
-                }
+        // 显示/隐藏新版本徽章
+        const updateBadge = document.getElementById('update-badge');
+        const badgeVersion = document.getElementById('update-badge-version');
+        if (updateBadge) {
+            if (hasUpdate && latestVer) {
+                updateBadge.classList.remove('hidden');
+                if (badgeVersion) badgeVersion.innerText = latestVer;
+            } else {
+                updateBadge.classList.add('hidden');
             }
         }
     } catch (e) {

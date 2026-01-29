@@ -415,7 +415,7 @@
         </div>
 
         <!-- 系统更新 -->
-        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div id="update-section" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 transition-all duration-300">
             <h3 class="font-bold text-lg text-gray-800 mb-6 flex items-center">
                 <span class="bg-cyan-100 text-cyan-600 p-1.5 rounded-lg mr-3">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
@@ -1497,6 +1497,26 @@
         loadUpdateInfo();
         loadBackupList();
         loadAutoUpdateConfig();
+
+        // 备份列表定时刷新（每30秒）
+        setInterval(() => {
+            loadBackupList();
+        }, 30000);
+
+        // 处理 URL hash 跳转（从其他页面点击新版本徽章跳转过来时）
+        if (window.location.hash === '#update-section') {
+            setTimeout(() => {
+                const updateCard = document.getElementById('update-section');
+                if (updateCard) {
+                    updateCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // 添加高亮效果
+                    updateCard.classList.add('ring-2', 'ring-cyan-400', 'ring-offset-2');
+                    setTimeout(() => {
+                        updateCard.classList.remove('ring-2', 'ring-cyan-400', 'ring-offset-2');
+                    }, 3000);
+                }
+            }, 500);
+        }
     </script>
 </body>
 </html>

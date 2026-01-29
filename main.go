@@ -126,6 +126,7 @@ func main() {
 			authorized.GET("/config", api.GetConfigHandler)
 			authorized.GET("/config/version", api.GetVersionHandler) // 新增
 			authorized.GET("/config/check-update", api.CheckUpdateHandler) // 新增：版本检查代理
+			authorized.GET("/config/cached-update", api.GetCachedUpdateHandler) // 获取缓存的版本信息（快速）
 			authorized.GET("/config/update-info", api.GetUpdateInfoHandler)   // 获取更新详情
 			authorized.POST("/config/update", api.PerformUpdateHandler)       // 执行在线更新
 			authorized.GET("/config/update-status", api.GetUpdateStatusHandler) // 获取更新状态
@@ -289,10 +290,13 @@ func main() {
 		c.Redirect(http.StatusMovedPermanently, "/dashboard/")
 	})
 
-	// 6. 启动自动更新检测
+	// 6. 启动版本缓存更新（每60分钟检测一次，用于全局版本提示）
+	api.StartVersionCacheUpdater()
+	
+	// 7. 启动自动更新检测
 	api.StartAutoUpdateChecker()
 
-	// 7. 启动服务
+	// 8. 启动服务
 	port := config.AppConfig.Port
 	if port == "" {
 		port = "9901"

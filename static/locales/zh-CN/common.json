@@ -30,6 +30,7 @@
     "common.total": "共",
     "common.records": "条",
     "common.copied": "已复制",
+    "common.new_version_available": "有新版本可用",
     
     "nav.dashboard": "仪表盘",
     "nav.send": "发送中心",
