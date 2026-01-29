@@ -186,7 +186,7 @@
             left: 50%;
             transform: translateX(-50%);
             width: calc(100% - 32px);
-            max-width: 1200px;
+            max-width: 1400px;
             padding: 12px 24px;
             border-radius: var(--radius-lg);
             z-index: 1000;
@@ -413,6 +413,102 @@
             transition: 0s;
         }
 
+        /* ========== Hero 预览图 ========== */
+        .hero-preview-wrapper {
+            margin-top: 60px;
+            perspective: 1000px;
+            animation: fadeInUp 0.8s var(--ease-out) 0.4s forwards;
+            opacity: 0;
+            width: 100%;
+            max-width: 1000px;
+            padding: 0 20px;
+        }
+
+        .hero-preview {
+            position: relative;
+            border-radius: var(--radius-lg);
+            background: var(--glass-secondary);
+            border: 1px solid var(--glass-border);
+            box-shadow: 
+                0 20px 50px rgba(0,0,0,0.1), 
+                0 0 0 1px rgba(255,255,255,0.1);
+            overflow: hidden;
+            transform: rotateX(2deg);
+            transition: transform 0.5s var(--ease-out);
+        }
+
+        .hero-preview:hover {
+            transform: rotateX(0deg) scale(1.02);
+        }
+
+        .hero-preview img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        /* 窗口装饰点 */
+        .window-dots {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            display: flex;
+            gap: 6px;
+            z-index: 10;
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .dot-red { background: #FF5F56; }
+        .dot-yellow { background: #FFBD2E; }
+        .dot-green { background: #27C93F; }
+
+        /* ========== 截图轮播 ========== */
+        .screenshots-scroller {
+            display: flex;
+            gap: 24px;
+            overflow-x: auto;
+            padding: 20px 4px 40px;
+            scroll-snap-type: x mandatory;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .screenshot-item {
+            flex: 0 0 auto;
+            width: 800px;
+            max-width: 90vw;
+            scroll-snap-align: center;
+            border-radius: var(--radius-lg);
+            background: var(--glass-primary);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+            position: relative;
+            transition: transform 0.3s ease;
+        }
+
+        .screenshot-item:hover {
+            transform: translateY(-5px);
+        }
+
+        .screenshot-item img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .screenshot-caption {
+            padding: 16px;
+            text-align: center;
+            font-weight: 500;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--glass-border-subtle);
+        }
+
         /* ========== 统计卡片 ========== */
         .stats {
             display: flex;
@@ -452,14 +548,14 @@
         .section {
             position: relative;
             z-index: 1;
-            padding: 80px 24px;
-            max-width: 1200px;
+            padding: 100px 24px;
+            max-width: 1400px;
             margin: 0 auto;
         }
 
         .section-header {
             text-align: center;
-            margin-bottom: 48px;
+            margin-bottom: 64px;
         }
 
         .section-header h2 {
@@ -738,7 +834,7 @@
         }
 
         .footer-content {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 0 auto;
             display: grid;
             grid-template-columns: 2fr 1fr 1fr 1fr;
@@ -781,7 +877,7 @@
         }
 
         .footer-bottom {
-            max-width: 1200px;
+            max-width: 1400px;
             margin: 40px auto 0;
             padding-top: 24px;
             border-top: 1px solid var(--glass-border-subtle);
@@ -950,6 +1046,17 @@
             </a>
         </div>
 
+        <div class="hero-preview-wrapper">
+            <div class="hero-preview">
+                <div class="window-dots">
+                    <div class="dot dot-red"></div>
+                    <div class="dot dot-yellow"></div>
+                    <div class="dot dot-green"></div>
+                </div>
+                <img src="image/zh/02.png" alt="Dashboard Preview">
+            </div>
+        </div>
+
         <div class="stats glass-secondary">
             <div class="stat-item">
                 <div class="stat-value" id="stars-count">--</div>
@@ -1003,6 +1110,62 @@
                 <div class="feature-icon">🔧</div>
                 <h3 data-i18n="features.api.title">开发者友好</h3>
                 <p data-i18n="features.api.desc">RESTful API、永久密钥、模板引擎、Webhook 回调</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- 界面预览 -->
+    <section class="section" id="screenshots">
+        <div class="section-header">
+            <h2 data-i18n="screenshots.title">🖼️ 界面预览</h2>
+            <p data-i18n="screenshots.subtitle">现代化、极简的设计风格</p>
+        </div>
+        
+        <div class="screenshots-scroller">
+            <div class="screenshot-item">
+                <div class="window-dots">
+                    <div class="dot dot-red"></div>
+                    <div class="dot dot-yellow"></div>
+                    <div class="dot dot-green"></div>
+                </div>
+                <img src="image/zh/01.png" alt="Login">
+                <div class="screenshot-caption" data-i18n="screenshots.login">登录页面</div>
+            </div>
+            <div class="screenshot-item">
+                <div class="window-dots">
+                    <div class="dot dot-red"></div>
+                    <div class="dot dot-yellow"></div>
+                    <div class="dot dot-green"></div>
+                </div>
+                <img src="image/zh/04.png" alt="Send Mail">
+                <div class="screenshot-caption" data-i18n="screenshots.send">发送邮件</div>
+            </div>
+            <div class="screenshot-item">
+                <div class="window-dots">
+                    <div class="dot dot-red"></div>
+                    <div class="dot dot-yellow"></div>
+                    <div class="dot dot-green"></div>
+                </div>
+                <img src="image/zh/06.png" alt="Campaigns">
+                <div class="screenshot-caption" data-i18n="screenshots.campaign">营销任务</div>
+            </div>
+            <div class="screenshot-item">
+                <div class="window-dots">
+                    <div class="dot dot-red"></div>
+                    <div class="dot dot-yellow"></div>
+                    <div class="dot dot-green"></div>
+                </div>
+                <img src="image/zh/07.png" alt="Inbox">
+                <div class="screenshot-caption" data-i18n="screenshots.inbox">收件箱</div>
+            </div>
+            <div class="screenshot-item">
+                <div class="window-dots">
+                    <div class="dot dot-red"></div>
+                    <div class="dot dot-yellow"></div>
+                    <div class="dot dot-green"></div>
+                </div>
+                <img src="image/zh/10.png" alt="Settings">
+                <div class="screenshot-caption" data-i18n="screenshots.settings">系统设置</div>
             </div>
         </div>
     </section>
@@ -1154,6 +1317,13 @@
                 'features.cert.desc': 'Let\'s Encrypt 自动申请/续期，支持手动上传 SSL 证书',
                 'features.api.title': '开发者友好',
                 'features.api.desc': 'RESTful API、永久密钥、模板引擎、Webhook 回调',
+                'screenshots.title': '🖼️ 界面预览',
+                'screenshots.subtitle': '现代化、极简的设计风格',
+                'screenshots.login': '登录页面',
+                'screenshots.send': '发送邮件',
+                'screenshots.campaign': '营销任务',
+                'screenshots.inbox': '收件箱',
+                'screenshots.settings': '系统设置',
                 'download.title': '📥 下载安装',
                 'download.subtitle': '选择适合您系统的版本',
                 'download.latest': '最新稳定版',
@@ -1206,6 +1376,13 @@
                 'features.cert.desc': 'Let\'s Encrypt auto-renewal, manual SSL certificate upload',
                 'features.api.title': 'Developer Friendly',
                 'features.api.desc': 'RESTful API, permanent keys, template engine, webhooks',
+                'screenshots.title': '🖼️ Screenshots',
+                'screenshots.subtitle': 'Modern, minimalist design style',
+                'screenshots.login': 'Login Page',
+                'screenshots.send': 'Send Mail',
+                'screenshots.campaign': 'Campaigns',
+                'screenshots.inbox': 'Inbox',
+                'screenshots.settings': 'Settings',
                 'download.title': '📥 Download',
                 'download.subtitle': 'Choose the version for your system',
                 'download.latest': 'Latest Stable',
