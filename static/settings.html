@@ -547,9 +547,17 @@
         async function saveConfig(e, type) {
             e.preventDefault();
             
-            // 合并配置
+            // 定义敏感字段列表 (这些字段后端返回掩码值，不应回传)
+            const sensitiveFields = ['jwt_secret', 'dkim_private_key'];
+            
+            // 从 currentConfig 中排除敏感字段后合并
+            const safeCurrentConfig = Object.fromEntries(
+                Object.entries(currentConfig).filter(([key]) => !sensitiveFields.includes(key))
+            );
+            
+            // 合并配置 (排除敏感字段后的基础配置 + 表单输入值)
             const newConfig = {
-                ...currentConfig,
+                ...safeCurrentConfig,
                 domain: getDomainValue(),
                 dkim_selector: document.getElementById('dkim_selector').value,
                 host: document.getElementById('host').value,
@@ -568,6 +576,17 @@
                 receiver_blacklist: document.getElementById('receiver_blacklist').value,
                 receiver_require_tls: document.getElementById('receiver_require_tls').checked
             };
+            
+            // 二次安全检查：确保没有敏感字段的掩码值被发送
+            // (防御性编程，防止未来代码变更引入问题)
+            sensitiveFields.forEach(field => {
+                if (newConfig[field] && (
+                    String(newConfig[field]).includes('***') || 
+                    String(newConfig[field]).includes('Hidden')
+                )) {
+                    delete newConfig[field];
+                }
+            });
 
             try {
                 await request('/config', { method: 'POST', body: JSON.stringify(newConfig) });

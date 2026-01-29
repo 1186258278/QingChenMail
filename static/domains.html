@@ -26,11 +26,60 @@
         </div>
     </div>
 
-    <!-- 域名列表 -->
-    <div id="domain-list" class="space-y-6"></div>
+    <!-- 域名列表容器 -->
+    <div id="domain-list" class="space-y-6">
+        <!-- 域名卡片由 JS 动态生成 -->
+        <div class="text-center py-16">
+            <svg class="animate-spin h-8 w-8 mx-auto mb-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span class="text-gray-500" data-i18n="common.loading">加载中...</span>
+        </div>
+    </div>
+
+    <!-- 证书夹侧边栏 -->
+    <div id="cert-drawer" class="fixed inset-y-0 right-0 w-[600px] bg-white shadow-2xl transform translate-x-full transition-transform duration-300 z-50 flex flex-col">
+        <div class="p-6 border-b flex justify-between items-center bg-gray-50">
+            <div>
+                <h3 class="text-xl font-bold text-gray-800 flex items-center">
+                    <svg class="w-6 h-6 mr-2 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                    <span data-i18n="certs.title">SSL 证书管理</span>
+                </h3>
+                <p class="text-sm text-gray-500 mt-1" data-i18n="certs.subtitle">管理用于 STARTTLS 和 HTTPS 的证书</p>
+            </div>
+            <button onclick="closeCertDrawer()" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        
+        <div class="p-4 border-b bg-white flex space-x-3">
+            <button onclick="openUploadCertModal()" class="flex-1 bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 transition flex items-center justify-center">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                <span data-i18n="certs.upload_btn">上传证书</span>
+            </button>
+            <button onclick="openAcmeModal()" class="flex-1 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition flex items-center justify-center">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                <span data-i18n="certs.apply_btn">一键申请 (免费)</span>
+            </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-6 bg-gray-50">
+            <div id="cert-list" class="space-y-4">
+                <!-- 证书列表加载中 -->
+                <div class="text-center py-8 text-gray-500">
+                    <svg class="animate-spin h-8 w-8 mx-auto mb-4 text-emerald-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span data-i18n="common.loading">加载中...</span>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- 添加域名模态框 -->
-    <div id="domain-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+    <div id="domain-modal" class="fixed inset-0 bg-black/60 hidden z-50 flex items-center justify-center">
         <div class="bg-white rounded-xl p-8 w-[500px] shadow-2xl">
             <h3 class="font-bold text-xl mb-4 text-gray-800" data-i18n="domains.modal.add_title">添加发信域名</h3>
             <div class="mb-6 bg-blue-50 text-blue-700 text-sm p-4 rounded-lg flex items-start">
@@ -60,7 +109,7 @@
     </div>
 
     <!-- 添加转发规则模态框 -->
-    <div id="forward-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center backdrop-blur-sm">
+    <div id="forward-modal" class="fixed inset-0 bg-black/60 hidden z-50 flex items-center justify-center">
         <div class="bg-white rounded-xl p-8 w-[550px] shadow-2xl">
             <h3 class="font-bold text-xl mb-4 text-gray-800" data-i18n="domains.modal.fwd_title">添加邮件转发规则</h3>
             <div class="mb-4 bg-indigo-50 text-indigo-700 text-sm p-4 rounded-lg flex items-start">
@@ -140,7 +189,7 @@
     </div>
 
     <!-- 上传证书模态框 -->
-    <div id="upload-cert-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-[60] flex items-center justify-center backdrop-blur-sm">
+    <div id="upload-cert-modal" class="fixed inset-0 bg-black/60 hidden z-[60] flex items-center justify-center">
         <div class="bg-white rounded-xl p-6 w-[550px] shadow-2xl max-h-[90vh] overflow-y-auto">
             <h3 class="font-bold text-xl mb-4 text-gray-800 flex items-center">
                 <svg class="w-6 h-6 mr-2 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
@@ -177,8 +226,49 @@
         </div>
     </div>
 
+    <!-- 绑定证书模态框 -->
+    <div id="bind-cert-modal" class="fixed inset-0 bg-black/60 hidden z-[60] flex items-center justify-center">
+        <div class="bg-white rounded-xl p-6 w-[500px] shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h3 class="font-bold text-xl mb-4 text-gray-800 flex items-center">
+                <svg class="w-6 h-6 mr-2 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                <span data-i18n="domains.cert.bind_title">绑定 SSL 证书</span>
+            </h3>
+            <input type="hidden" id="bind-cert-domain-id">
+            <p class="text-sm text-gray-500 mb-4" data-i18n="domains.cert.bind_desc">选择一个证书绑定到此域名，用于 STARTTLS 邮件加密传输。</p>
+            
+            <!-- 当前绑定状态 -->
+            <div id="current-cert-info" class="hidden mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+                <p class="text-sm text-emerald-700 font-medium mb-1" data-i18n="domains.cert.current_cert">当前绑定证书:</p>
+                <p id="current-cert-name" class="text-sm text-emerald-600"></p>
+                <button type="button" onclick="unbindCertificate()" class="mt-2 text-xs text-red-500 hover:text-red-700" data-i18n="domains.cert.unbind">解除绑定</button>
+            </div>
+            
+            <!-- 证书列表 -->
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2" data-i18n="domains.cert.select_cert">选择证书</label>
+                <div id="cert-select-list" class="space-y-2 max-h-64 overflow-y-auto">
+                    <div class="text-center text-gray-400 py-4" data-i18n="common.loading">加载中...</div>
+                </div>
+            </div>
+            
+            <!-- 快捷操作 -->
+            <div class="flex space-x-2 mb-4">
+                <button type="button" onclick="closeBindCertModal(); openUploadCertModal();" class="flex-1 text-sm px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">
+                    <span data-i18n="domains.cert.upload_new">上传新证书</span>
+                </button>
+                <button type="button" onclick="closeBindCertModal(); openAcmeModal();" class="flex-1 text-sm px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition">
+                    <span data-i18n="domains.cert.apply_new">申请免费证书</span>
+                </button>
+            </div>
+            
+            <div class="flex justify-end space-x-3 pt-4 border-t">
+                <button type="button" onclick="closeBindCertModal()" class="px-5 py-2 text-gray-500 hover:bg-gray-100 rounded-lg transition" data-i18n="common.cancel">取消</button>
+            </div>
+        </div>
+    </div>
+
     <!-- ACME 申请证书模态框 -->
-    <div id="acme-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-[60] flex items-center justify-center backdrop-blur-sm">
+    <div id="acme-modal" class="fixed inset-0 bg-black/60 hidden z-[60] flex items-center justify-center">
         <div class="bg-white rounded-xl p-6 w-[550px] shadow-2xl max-h-[90vh] overflow-y-auto">
             <h3 class="font-bold text-xl mb-4 text-gray-800 flex items-center">
                 <svg class="w-6 h-6 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
@@ -283,6 +373,25 @@
                     // 初始化前缀（如果是旧数据没字段，默认为空）
                     const prefix = d.mail_subdomain_prefix || '';
 
+                    // 生成证书状态徽章
+                    const certStatusBadge = (status, daysLeft, certDomains, domainId) => {
+                        const configs = {
+                            'valid': { bg: 'bg-emerald-100', text: 'text-emerald-700', dot: 'bg-emerald-500', icon: '🔒', label: `SSL: ${daysLeft}天` },
+                            'warning': { bg: 'bg-yellow-100', text: 'text-yellow-700', dot: 'bg-yellow-500', icon: '⚠️', label: `SSL: ${daysLeft}天` },
+                            'critical': { bg: 'bg-red-100', text: 'text-red-700', dot: 'bg-red-500', icon: '🔴', label: `SSL: ${daysLeft}天` },
+                            'expired': { bg: 'bg-gray-100', text: 'text-gray-500', dot: 'bg-gray-400', icon: '❌', label: 'SSL: 已过期' },
+                            'none': { bg: 'bg-gray-100', text: 'text-gray-500', dot: 'bg-gray-300', icon: '🔓', label: 'SSL: 未绑定' }
+                        };
+                        const cfg = configs[status] || configs['none'];
+                        const tooltip = certDomains ? `证书域名: ${certDomains}` : '点击绑定证书';
+                        return `
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${cfg.bg} ${cfg.text} cursor-pointer hover:opacity-80 transition" 
+                                  title="${tooltip}" onclick="openBindCertModal(${domainId})">
+                                <span class="mr-1">${cfg.icon}</span>
+                                ${cfg.label}
+                            </span>`;
+                    };
+
                     const div = document.createElement('div');
                     div.className = 'bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden';
                     div.innerHTML = `
@@ -300,9 +409,14 @@
                                     <span id="badge-a-${d.id}" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
                                         <span class="w-2 h-2 rounded-full mr-1.5 bg-gray-400"></span> <span data-i18n="domains.status.a_checking">A记录: 检测中...</span>
                                     </span>
+                                    ${certStatusBadge(d.cert_status, d.cert_days_left, d.cert_domains, d.id)}
                                 </div>
                             </div>
                             <div class="flex space-x-2">
+                                <button onclick="openBindCertModal(${d.id})" class="px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded hover:bg-emerald-100 transition text-sm font-medium flex items-center" title="${d.cert_status === 'none' ? '绑定证书' : '更换证书'}">
+                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                                    <span data-i18n="domains.action.bind_cert">${d.cert_status === 'none' ? '绑定证书' : '证书'}</span>
+                                </button>
                                 <button onclick="verifyDomain(${d.id})" class="px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded hover:bg-indigo-100 transition text-sm font-medium" data-i18n="domains.action.refresh">刷新状态</button>
                                 <button onclick="deleteDomain(${d.id})" class="px-3 py-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition text-sm" data-i18n="domains.action.delete">删除</button>
                             </div>
@@ -970,6 +1084,128 @@
                 showToast('复制失败', 'error');
             }
             document.body.removeChild(ta);
+        }
+
+        // ========== 绑定证书功能 ==========
+        let currentBindDomainId = null;
+        let currentDomainCertId = null;
+
+        async function openBindCertModal(domainId) {
+            currentBindDomainId = domainId;
+            document.getElementById('bind-cert-domain-id').value = domainId;
+            document.getElementById('bind-cert-modal').classList.remove('hidden');
+            
+            // 加载域名当前绑定状态
+            const domains = await request('/domains');
+            const domain = domains.find(d => d.id === domainId);
+            const currentCertInfo = document.getElementById('current-cert-info');
+            
+            if (domain && domain.certificate_id && domain.certificate) {
+                currentDomainCertId = domain.certificate_id;
+                document.getElementById('current-cert-name').textContent = 
+                    `${domain.certificate.domains || domain.certificate.name || '未知'} (剩余 ${domain.cert_days_left} 天)`;
+                currentCertInfo.classList.remove('hidden');
+            } else {
+                currentDomainCertId = null;
+                currentCertInfo.classList.add('hidden');
+            }
+            
+            // 加载可选证书列表
+            await loadCertSelectList();
+        }
+
+        function closeBindCertModal() {
+            document.getElementById('bind-cert-modal').classList.add('hidden');
+            currentBindDomainId = null;
+        }
+
+        async function loadCertSelectList() {
+            const container = document.getElementById('cert-select-list');
+            try {
+                const certs = await request('/certs');
+                
+                if (!certs || certs.length === 0) {
+                    container.innerHTML = `
+                        <div class="text-center text-gray-400 py-6">
+                            <svg class="w-10 h-10 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            <p data-i18n="domains.cert.no_cert">暂无可用证书</p>
+                            <p class="text-xs mt-1" data-i18n="domains.cert.no_cert_hint">请先上传或申请证书</p>
+                        </div>`;
+                    if (typeof I18n !== 'undefined' && I18n.isReady) I18n.render();
+                    return;
+                }
+
+                container.innerHTML = certs.map(c => {
+                    const isSelected = currentDomainCertId === c.id;
+                    const statusClass = {
+                        'valid': 'border-emerald-300 bg-emerald-50',
+                        'warning': 'border-yellow-300 bg-yellow-50',
+                        'critical': 'border-red-300 bg-red-50',
+                        'expired': 'border-gray-300 bg-gray-50'
+                    }[c.status] || 'border-gray-200';
+                    
+                    const statusIcon = {
+                        'valid': '✅',
+                        'warning': '⚠️',
+                        'critical': '🔴',
+                        'expired': '❌'
+                    }[c.status] || '❓';
+
+                    return `
+                        <div class="p-3 border rounded-lg ${statusClass} hover:shadow-sm transition cursor-pointer ${isSelected ? 'ring-2 ring-emerald-500' : ''}"
+                             onclick="bindCertificate(${c.id})">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1 min-w-0">
+                                    <p class="font-medium text-gray-800 truncate">${c.domains ? c.domains.split(',')[0] : c.name || '未知'}</p>
+                                    <p class="text-xs text-gray-500 mt-1">
+                                        ${statusIcon} ${c.days_left >= 0 ? `剩余 ${c.days_left} 天` : '已过期'} · 
+                                        ${c.issuer || '未知颁发者'}
+                                    </p>
+                                </div>
+                                ${isSelected ? '<span class="text-emerald-600 text-xs font-medium px-2 py-0.5 bg-emerald-100 rounded">当前</span>' : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+                if (typeof I18n !== 'undefined' && I18n.isReady) I18n.render();
+            } catch (e) {
+                console.error('加载证书列表失败', e);
+                container.innerHTML = `<div class="text-center text-red-500 py-4">加载失败: ${e.message}</div>`;
+            }
+        }
+
+        async function bindCertificate(certId) {
+            if (!currentBindDomainId) return;
+            
+            try {
+                await request(`/domains/${currentBindDomainId}/bind-cert`, {
+                    method: 'POST',
+                    body: JSON.stringify({ certificate_id: certId })
+                });
+                showToast(I18n.t('domains.cert.bind_success') || '证书绑定成功');
+                closeBindCertModal();
+                loadDomains(); // 刷新域名列表
+            } catch (err) {
+                showToast(err.message || '绑定失败', 'error');
+            }
+        }
+
+        async function unbindCertificate() {
+            if (!currentBindDomainId) return;
+            if (!confirm(I18n.t('domains.cert.unbind_confirm') || '确定要解除证书绑定吗？')) return;
+            
+            try {
+                await request(`/domains/${currentBindDomainId}/bind-cert`, {
+                    method: 'POST',
+                    body: JSON.stringify({ certificate_id: null })
+                });
+                showToast(I18n.t('domains.cert.unbind_success') || '已解除绑定');
+                closeBindCertModal();
+                loadDomains();
+            } catch (err) {
+                showToast(err.message || '解绑失败', 'error');
+            }
         }
         
         loadDomains();

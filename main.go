@@ -150,6 +150,7 @@ func main() {
 			authorized.PUT("/domains/:id", api.UpdateDomainHandler) // 新增 Update
 			authorized.DELETE("/domains/:id", api.DeleteDomainHandler)
 			authorized.POST("/domains/:id/verify", api.VerifyDomainHandler)
+			authorized.POST("/domains/:id/bind-cert", api.BindDomainCertHandler) // 绑定证书
 
 			// 模板管理
 			authorized.POST("/templates", api.CreateTemplateHandler)

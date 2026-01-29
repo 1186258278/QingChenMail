@@ -14,6 +14,7 @@
     "domains.action.refresh": "刷新状态",
     "domains.action.delete": "删除",
     "domains.action.verifying": "验证中...",
+    "domains.action.bind_cert": "绑定证书",
     "domains.dns.title": "DNS 配置记录",
     "domains.dns.subtitle": "请在您的 DNS 服务商处添加以下记录",
     "domains.dns.mail_server": "邮件服务器地址",
@@ -83,5 +84,18 @@
     "domains.cert.acme_success": "证书申请成功！",
     "domains.cert.apply_confirm": "确定要将此证书应用到 STARTTLS 配置吗？应用后需要重启服务生效。",
     "domains.cert.apply_success": "证书已应用，请重启服务生效",
-    "domains.cert.delete_confirm": "确定要删除此证书吗？"
+    "domains.cert.delete_confirm": "确定要删除此证书吗？",
+
+    "domains.cert.bind_title": "绑定 SSL 证书",
+    "domains.cert.bind_desc": "选择一个证书绑定到此域名，用于 STARTTLS 邮件加密传输。",
+    "domains.cert.current_cert": "当前绑定证书:",
+    "domains.cert.unbind": "解除绑定",
+    "domains.cert.select_cert": "选择证书",
+    "domains.cert.no_cert": "暂无可用证书",
+    "domains.cert.no_cert_hint": "请先上传或申请证书",
+    "domains.cert.upload_new": "上传新证书",
+    "domains.cert.apply_new": "申请免费证书",
+    "domains.cert.bind_success": "证书绑定成功",
+    "domains.cert.unbind_confirm": "确定要解除证书绑定吗？",
+    "domains.cert.unbind_success": "已解除绑定"
 }

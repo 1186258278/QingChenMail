@@ -14,6 +14,7 @@
     "domains.action.refresh": "Refresh Status",
     "domains.action.delete": "Delete",
     "domains.action.verifying": "Verifying...",
+    "domains.action.bind_cert": "Bind Certificate",
     "domains.dns.title": "DNS Configuration",
     "domains.dns.subtitle": "Please add the following records at your DNS provider",
     "domains.dns.mail_server": "Mail Server Address",
@@ -83,5 +84,18 @@
     "domains.cert.acme_success": "Certificate obtained successfully!",
     "domains.cert.apply_confirm": "Apply this certificate to STARTTLS configuration? Requires service restart to take effect.",
     "domains.cert.apply_success": "Certificate applied, please restart service",
-    "domains.cert.delete_confirm": "Are you sure you want to delete this certificate?"
+    "domains.cert.delete_confirm": "Are you sure you want to delete this certificate?",
+
+    "domains.cert.bind_title": "Bind SSL Certificate",
+    "domains.cert.bind_desc": "Select a certificate to bind to this domain for STARTTLS email encryption.",
+    "domains.cert.current_cert": "Currently Bound:",
+    "domains.cert.unbind": "Unbind",
+    "domains.cert.select_cert": "Select Certificate",
+    "domains.cert.no_cert": "No certificates available",
+    "domains.cert.no_cert_hint": "Please upload or request a certificate first",
+    "domains.cert.upload_new": "Upload New Certificate",
+    "domains.cert.apply_new": "Get Free Certificate",
+    "domains.cert.bind_success": "Certificate bound successfully",
+    "domains.cert.unbind_confirm": "Are you sure you want to unbind this certificate?",
+    "domains.cert.unbind_success": "Certificate unbound"
 }

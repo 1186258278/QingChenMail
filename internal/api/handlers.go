@@ -199,6 +199,12 @@ func AuthMiddleware() gin.HandlerFunc {
 		})
 
 		if err == nil && token.Valid {
+			// 从 JWT claims 中提取 username 并设置到 context
+			if claims, ok := token.Claims.(jwt.MapClaims); ok {
+				if username, exists := claims["username"]; exists {
+					c.Set("username", username)
+				}
+			}
 			c.Next()
 			return
 		}
@@ -550,8 +556,44 @@ func CreateDomainHandler(c *gin.Context) {
 
 func ListDomainHandler(c *gin.Context) {
 	domains := []database.Domain{}
-	database.DB.Find(&domains)
-	c.JSON(http.StatusOK, domains)
+	// 预加载关联的证书信息，以便前端展示证书状态
+	database.DB.Preload("Certificate").Find(&domains)
+	
+	// 构建响应，添加证书状态摘要信息
+	type DomainWithCertStatus struct {
+		database.Domain
+		CertStatus   string `json:"cert_status"`   // valid, warning, critical, expired, none
+		CertDaysLeft int    `json:"cert_days_left"` // 剩余天数，-1 表示无证书
+		CertDomains  string `json:"cert_domains"`   // 证书包含的域名
+	}
+	
+	result := make([]DomainWithCertStatus, len(domains))
+	for i, d := range domains {
+		result[i] = DomainWithCertStatus{
+			Domain:       d,
+			CertStatus:   "none",
+			CertDaysLeft: -1,
+		}
+		
+		if d.Certificate != nil {
+			result[i].CertDomains = d.Certificate.Domains
+			daysLeft := int(time.Until(d.Certificate.NotAfter).Hours() / 24)
+			result[i].CertDaysLeft = daysLeft
+			
+			switch {
+			case daysLeft < 0:
+				result[i].CertStatus = "expired"
+			case daysLeft <= 7:
+				result[i].CertStatus = "critical"
+			case daysLeft <= 30:
+				result[i].CertStatus = "warning"
+			default:
+				result[i].CertStatus = "valid"
+			}
+		}
+	}
+	
+	c.JSON(http.StatusOK, result)
 }
 
 func DeleteDomainHandler(c *gin.Context) {
@@ -585,6 +627,46 @@ func UpdateDomainHandler(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	c.JSON(http.StatusOK, domain)
+}
+
+// BindDomainCertHandler 绑定/解绑域名与证书
+func BindDomainCertHandler(c *gin.Context) {
+	id := c.Param("id")
+	var domain database.Domain
+	if err := database.DB.First(&domain, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Domain not found"})
+		return
+	}
+
+	var req struct {
+		CertificateID *uint `json:"certificate_id"` // null 表示解绑
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 如果指定了证书 ID，验证证书存在
+	if req.CertificateID != nil && *req.CertificateID > 0 {
+		var cert database.Certificate
+		if err := database.DB.First(&cert, *req.CertificateID).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Certificate not found"})
+			return
+		}
+		domain.CertificateID = req.CertificateID
+	} else {
+		// 解绑证书
+		domain.CertificateID = nil
+	}
+
+	if err := database.DB.Save(&domain).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 返回更新后的域名信息（带证书）
+	database.DB.Preload("Certificate").First(&domain, id)
 	c.JSON(http.StatusOK, domain)
 }
 
@@ -940,8 +1022,10 @@ func UpdateConfigHandler(c *gin.Context) {
 		rand.Read(b)
 		newConfig.JWTSecret = fmt.Sprintf("goemail-secret-%x", b)
 	} else if newConfig.JWTSecret == "" || strings.Contains(newConfig.JWTSecret, "Hidden") || strings.HasPrefix(newConfig.JWTSecret, "***") {
+		// 如果前端传回空、包含 Hidden 或掩码，则保持原值不变
 		newConfig.JWTSecret = config.AppConfig.JWTSecret
 	}
+	// 只有当 newConfig.JWTSecret 是有效的具体值（非空、非掩码、非RESET）时，才会更新为新值
 
 	// 3. 默认值保护
 	if newConfig.Host == "" {

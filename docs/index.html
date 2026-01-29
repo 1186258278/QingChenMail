@@ -1053,7 +1053,7 @@
                     <div class="dot dot-yellow"></div>
                     <div class="dot dot-green"></div>
                 </div>
-                <img src="image/zh/02.png" alt="Dashboard Preview">
+                <img src="image/zh/02.png" data-i18n-img="02.png" alt="Dashboard Preview">
             </div>
         </div>
 
@@ -1128,7 +1128,7 @@
                     <div class="dot dot-yellow"></div>
                     <div class="dot dot-green"></div>
                 </div>
-                <img src="image/zh/01.png" alt="Login">
+                <img src="image/zh/01.png" data-i18n-img="01.png" alt="Login">
                 <div class="screenshot-caption" data-i18n="screenshots.login">登录页面</div>
             </div>
             <div class="screenshot-item">
@@ -1137,7 +1137,7 @@
                     <div class="dot dot-yellow"></div>
                     <div class="dot dot-green"></div>
                 </div>
-                <img src="image/zh/04.png" alt="Send Mail">
+                <img src="image/zh/04.png" data-i18n-img="04.png" alt="Send Mail">
                 <div class="screenshot-caption" data-i18n="screenshots.send">发送邮件</div>
             </div>
             <div class="screenshot-item">
@@ -1146,7 +1146,7 @@
                     <div class="dot dot-yellow"></div>
                     <div class="dot dot-green"></div>
                 </div>
-                <img src="image/zh/06.png" alt="Campaigns">
+                <img src="image/zh/06.png" data-i18n-img="06.png" alt="Campaigns">
                 <div class="screenshot-caption" data-i18n="screenshots.campaign">营销任务</div>
             </div>
             <div class="screenshot-item">
@@ -1155,7 +1155,7 @@
                     <div class="dot dot-yellow"></div>
                     <div class="dot dot-green"></div>
                 </div>
-                <img src="image/zh/07.png" alt="Inbox">
+                <img src="image/zh/07.png" data-i18n-img="07.png" alt="Inbox">
                 <div class="screenshot-caption" data-i18n="screenshots.inbox">收件箱</div>
             </div>
             <div class="screenshot-item">
@@ -1164,7 +1164,7 @@
                     <div class="dot dot-yellow"></div>
                     <div class="dot dot-green"></div>
                 </div>
-                <img src="image/zh/10.png" alt="Settings">
+                <img src="image/zh/10.png" data-i18n-img="10.png" alt="Settings">
                 <div class="screenshot-caption" data-i18n="screenshots.settings">系统设置</div>
             </div>
         </div>
@@ -1418,11 +1418,19 @@
             localStorage.setItem('lang', lang);
             document.documentElement.lang = lang === 'zh-CN' ? 'zh-CN' : 'en';
             
+            // 更新文本内容
             document.querySelectorAll('[data-i18n]').forEach(el => {
                 const key = el.getAttribute('data-i18n');
                 if (i18n[lang] && i18n[lang][key]) {
                     el.innerHTML = i18n[lang][key];
                 }
+            });
+            
+            // 更新图片源 (根据语言切换截图)
+            const imgLang = lang === 'zh-CN' ? 'zh' : 'en';
+            document.querySelectorAll('[data-i18n-img]').forEach(img => {
+                const filename = img.getAttribute('data-i18n-img');
+                img.src = `image/${imgLang}/${filename}`;
             });
         }
 
