@@ -1,6 +1,6 @@
 /**
  * 晴辰云邮 - 全局加载动画
- * 信封开启 -> 纸飞机飞出 动效
+ * 企业级蓝色主题 - 信封开启纸飞机飞出动效
  */
 
 (function() {
@@ -8,8 +8,8 @@
 
     // 配置
     const CONFIG = {
-        minDisplayTime: 500,    // 最小显示时间 (ms)
-        fadeOutDuration: 350,   // 淡出动画时长 (ms)
+        minDisplayTime: 500,
+        fadeOutDuration: 350,
         brandName: '晴辰云邮',
         brandSubtitle: 'QINGCHEN MAIL'
     };
@@ -59,7 +59,7 @@
         return loader;
     }
 
-    // 加载器样式
+    // 加载器样式 - 企业级稳重蓝配色
     function getLoaderStyles() {
         return `
             #qc-loader {
@@ -78,11 +78,11 @@
                 pointer-events: none;
             }
             
-            /* 背景 - 浅色渐变 */
+            /* 背景 - 稳重深蓝渐变 */
             .qc-loader-backdrop {
                 position: absolute;
                 inset: 0;
-                background: linear-gradient(145deg, #667eea 0%, #764ba2 50%, #6B8DD6 100%);
+                background: linear-gradient(145deg, #1E3A5F 0%, #0F172A 100%);
             }
             
             .qc-loader-content {
@@ -90,7 +90,6 @@
                 display: flex;
                 flex-direction: column;
                 align-items: center;
-                color: #334155;
             }
             
             /* ========== 信封场景 ========== */
@@ -116,7 +115,7 @@
                 height: 70px;
                 background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
                 border-radius: 4px 4px 8px 8px;
-                box-shadow: 0 8px 32px rgba(102, 126, 234, 0.25), 0 2px 8px rgba(0,0,0,0.08);
+                box-shadow: 0 8px 32px rgba(30, 58, 95, 0.35), 0 2px 8px rgba(0,0,0,0.12);
                 overflow: hidden;
             }
             
@@ -126,7 +125,7 @@
                 left: 0;
                 right: 0;
                 height: 40px;
-                background: linear-gradient(to bottom, transparent 0%, rgba(102, 126, 234, 0.08) 100%);
+                background: linear-gradient(to bottom, transparent 0%, rgba(30, 58, 95, 0.06) 100%);
                 clip-path: polygon(0 100%, 50% 30%, 100% 100%);
             }
             
@@ -157,17 +156,17 @@
                 }
             }
             
-            /* 纸飞机 */
+            /* 纸飞机 - 亮蓝色 */
             .qc-paper-plane {
                 position: absolute;
                 top: 50%;
                 left: 50%;
                 width: 36px;
                 height: 36px;
-                color: #667eea;
+                color: #3B82F6;
                 transform: translate(-50%, -50%) scale(0) rotate(-45deg);
                 animation: qc-plane-fly 2.5s ease-in-out infinite;
-                filter: drop-shadow(0 2px 8px rgba(102, 126, 234, 0.4));
+                filter: drop-shadow(0 2px 8px rgba(59, 130, 246, 0.5));
             }
             
             .qc-paper-plane svg {
@@ -209,13 +208,13 @@
                 font-weight: 600;
                 letter-spacing: 3px;
                 margin-bottom: 6px;
-                text-shadow: 0 2px 12px rgba(0,0,0,0.15);
+                text-shadow: 0 2px 12px rgba(0,0,0,0.2);
             }
             
             .qc-brand-subtitle {
                 font-size: 11px;
                 font-weight: 500;
-                opacity: 0.85;
+                opacity: 0.7;
                 letter-spacing: 5px;
                 margin-bottom: 16px;
             }
@@ -224,7 +223,7 @@
             .qc-brand-line {
                 width: 80px;
                 height: 2px;
-                background: rgba(255,255,255,0.3);
+                background: rgba(255,255,255,0.2);
                 border-radius: 1px;
                 margin: 0 auto;
                 position: relative;
@@ -238,7 +237,7 @@
                 left: -100%;
                 width: 100%;
                 height: 100%;
-                background: linear-gradient(90deg, transparent, white, transparent);
+                background: linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.8), transparent);
                 animation: qc-line-shine 2s ease-in-out infinite;
             }
             
@@ -260,7 +259,6 @@
 
     // 显示加载器
     function show() {
-        // 确保 body 存在
         if (!document.body) {
             document.addEventListener('DOMContentLoaded', show);
             return;
@@ -319,17 +317,14 @@
 
     // 自动初始化
     function init() {
-        // 页面开始加载时显示
         show();
 
-        // DOM 加载完成后隐藏
         if (document.readyState === 'complete') {
             hide();
         } else {
             window.addEventListener('load', hide);
         }
 
-        // 设置页面切换过渡
         setupPageTransition();
     }
 
