@@ -341,3 +341,214 @@ const Utils = {
         return div.innerHTML;
     }
 };
+
+// ============================================
+// 通用模态框组件
+// ============================================
+
+const Modal = {
+    // 存储回调函数
+    _confirmCallback: null,
+    _alertCallback: null,
+    
+    // 初始化模态框 DOM（如果不存在则创建）
+    _ensureDOM: () => {
+        if (document.getElementById('global-confirm-modal')) return;
+        
+        const modalHTML = `
+            <!-- 确认模态框 -->
+            <div id="global-confirm-modal" class="fixed inset-0 bg-black/60 hidden z-[100] flex items-center justify-center">
+                <div class="bg-white rounded-xl p-6 w-[450px] shadow-2xl mx-4 transform transition-all">
+                    <div class="flex items-start mb-4">
+                        <div id="confirm-modal-icon" class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center mr-3">
+                            <!-- 动态图标 -->
+                        </div>
+                        <div class="flex-1">
+                            <h3 id="confirm-modal-title" class="font-bold text-lg text-gray-800"></h3>
+                        </div>
+                    </div>
+                    <div id="confirm-modal-content" class="text-gray-600 mb-6 whitespace-pre-line text-sm ml-13 pl-13"></div>
+                    <div class="flex justify-end space-x-3">
+                        <button id="confirm-modal-cancel" class="px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg transition font-medium">取消</button>
+                        <button id="confirm-modal-ok" class="px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md transition font-medium">确定</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 提示模态框 -->
+            <div id="global-alert-modal" class="fixed inset-0 bg-black/60 hidden z-[100] flex items-center justify-center">
+                <div class="bg-white rounded-xl p-6 w-[450px] shadow-2xl mx-4 transform transition-all">
+                    <div class="flex items-start mb-4">
+                        <div id="alert-modal-icon" class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center mr-3">
+                            <!-- 动态图标 -->
+                        </div>
+                        <div class="flex-1">
+                            <h3 id="alert-modal-title" class="font-bold text-lg text-gray-800"></h3>
+                        </div>
+                    </div>
+                    <div id="alert-modal-content" class="text-gray-600 mb-6 whitespace-pre-line text-sm"></div>
+                    <div class="flex justify-end">
+                        <button id="alert-modal-ok" class="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md transition font-medium">确定</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // 绑定事件
+        document.getElementById('confirm-modal-cancel').addEventListener('click', () => Modal._closeConfirm(false));
+        document.getElementById('confirm-modal-ok').addEventListener('click', () => Modal._closeConfirm(true));
+        document.getElementById('alert-modal-ok').addEventListener('click', () => Modal._closeAlert());
+        
+        // ESC 关闭
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                const confirmModal = document.getElementById('global-confirm-modal');
+                const alertModal = document.getElementById('global-alert-modal');
+                if (confirmModal && !confirmModal.classList.contains('hidden')) {
+                    Modal._closeConfirm(false);
+                }
+                if (alertModal && !alertModal.classList.contains('hidden')) {
+                    Modal._closeAlert();
+                }
+            }
+        });
+    },
+    
+    // 获取图标 HTML
+    _getIcon: (type) => {
+        const icons = {
+            warning: `<div class="bg-yellow-100 w-10 h-10 rounded-full flex items-center justify-center">
+                <svg class="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+            </div>`,
+            danger: `<div class="bg-red-100 w-10 h-10 rounded-full flex items-center justify-center">
+                <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+            </div>`,
+            success: `<div class="bg-green-100 w-10 h-10 rounded-full flex items-center justify-center">
+                <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>`,
+            info: `<div class="bg-blue-100 w-10 h-10 rounded-full flex items-center justify-center">
+                <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>`,
+            question: `<div class="bg-purple-100 w-10 h-10 rounded-full flex items-center justify-center">
+                <svg class="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>`
+        };
+        return icons[type] || icons.question;
+    },
+    
+    // 关闭确认框
+    _closeConfirm: (result) => {
+        const modal = document.getElementById('global-confirm-modal');
+        if (modal) modal.classList.add('hidden');
+        if (Modal._confirmCallback) {
+            Modal._confirmCallback(result);
+            Modal._confirmCallback = null;
+        }
+    },
+    
+    // 关闭提示框
+    _closeAlert: () => {
+        const modal = document.getElementById('global-alert-modal');
+        if (modal) modal.classList.add('hidden');
+        if (Modal._alertCallback) {
+            Modal._alertCallback();
+            Modal._alertCallback = null;
+        }
+    },
+    
+    /**
+     * 显示确认模态框
+     * @param {string} title - 标题
+     * @param {string} message - 消息内容
+     * @param {Object} options - 配置项
+     * @param {string} options.type - 图标类型: warning, danger, success, info, question
+     * @param {string} options.confirmText - 确认按钮文字
+     * @param {string} options.cancelText - 取消按钮文字
+     * @param {string} options.confirmClass - 确认按钮样式类
+     * @returns {Promise<boolean>} - 用户选择结果
+     */
+    confirm: (title, message, options = {}) => {
+        return new Promise((resolve) => {
+            Modal._ensureDOM();
+            Modal._confirmCallback = resolve;
+            
+            const modal = document.getElementById('global-confirm-modal');
+            const iconEl = document.getElementById('confirm-modal-icon');
+            const titleEl = document.getElementById('confirm-modal-title');
+            const contentEl = document.getElementById('confirm-modal-content');
+            const okBtn = document.getElementById('confirm-modal-ok');
+            const cancelBtn = document.getElementById('confirm-modal-cancel');
+            
+            // 设置内容
+            iconEl.innerHTML = Modal._getIcon(options.type || 'question');
+            titleEl.textContent = title;
+            contentEl.textContent = message;
+            
+            // 设置按钮文字
+            okBtn.textContent = options.confirmText || (typeof I18n !== 'undefined' ? I18n.t('common.confirm') : '确定');
+            cancelBtn.textContent = options.cancelText || (typeof I18n !== 'undefined' ? I18n.t('common.cancel') : '取消');
+            
+            // 设置按钮样式
+            okBtn.className = 'px-5 py-2.5 rounded-lg shadow-md transition font-medium ' + 
+                (options.confirmClass || 'bg-blue-600 text-white hover:bg-blue-700');
+            
+            // 显示模态框
+            modal.classList.remove('hidden');
+        });
+    },
+    
+    /**
+     * 显示提示模态框
+     * @param {string} title - 标题
+     * @param {string} message - 消息内容
+     * @param {Object} options - 配置项
+     * @param {string} options.type - 图标类型: warning, danger, success, info
+     * @param {string} options.buttonText - 按钮文字
+     * @returns {Promise<void>}
+     */
+    alert: (title, message, options = {}) => {
+        return new Promise((resolve) => {
+            Modal._ensureDOM();
+            Modal._alertCallback = resolve;
+            
+            const modal = document.getElementById('global-alert-modal');
+            const iconEl = document.getElementById('alert-modal-icon');
+            const titleEl = document.getElementById('alert-modal-title');
+            const contentEl = document.getElementById('alert-modal-content');
+            const okBtn = document.getElementById('alert-modal-ok');
+            
+            // 设置内容
+            iconEl.innerHTML = Modal._getIcon(options.type || 'info');
+            titleEl.textContent = title;
+            contentEl.textContent = message;
+            
+            // 设置按钮文字
+            okBtn.textContent = options.buttonText || (typeof I18n !== 'undefined' ? I18n.t('common.confirm') : '确定');
+            
+            // 显示模态框
+            modal.classList.remove('hidden');
+        });
+    }
+};
+
+// 兼容函数：替代原生 confirm
+async function showConfirmModal(title, message, options = {}) {
+    return Modal.confirm(title, message, options);
+}
+
+// 兼容函数：替代原生 alert
+async function showAlertModal(title, message, options = {}) {
+    return Modal.alert(title, message, options);
+}

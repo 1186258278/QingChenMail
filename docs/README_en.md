@@ -33,6 +33,9 @@ It supports dual delivery modes (Direct Send & SMTP Relay), automatic DKIM/SPF c
 *   **Zero-Maintenance**:
     *   Single binary deployment.
     *   Auto-calibration of database schema on startup.
+    *   **Online Updates**: One-click check/download/install new versions.
+    *   **Auto Backup**: Automatic backup before updates with one-click rollback.
+    *   **Hot Restart**: Auto-restart after updates without manual intervention.
 
 ## Screenshots
 

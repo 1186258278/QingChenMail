@@ -129,11 +129,20 @@ func main() {
 			authorized.GET("/config/update-info", api.GetUpdateInfoHandler)   // 获取更新详情
 			authorized.POST("/config/update", api.PerformUpdateHandler)       // 执行在线更新
 			authorized.GET("/config/update-status", api.GetUpdateStatusHandler) // 获取更新状态
+			authorized.POST("/config/restart", api.RestartHandler)             // 重启服务
+			authorized.GET("/config/auto-update", api.GetAutoUpdateConfigHandler)    // 获取自动更新配置
+			authorized.POST("/config/auto-update", api.UpdateAutoUpdateConfigHandler) // 更新自动更新配置
 			authorized.POST("/config", api.UpdateConfigHandler)
 			authorized.POST("/config/test-port", api.TestPortHandler)
 			authorized.POST("/config/kill-process", api.KillProcessHandler) // 新增
 			authorized.POST("/password", api.ChangePasswordHandler)
 			authorized.GET("/backup", api.BackupHandler)
+			
+			// 备份管理
+			authorized.GET("/backups", api.ListBackupsHandler)          // 获取备份列表
+			authorized.POST("/backups", api.CreateBackupHandler)        // 创建备份
+			authorized.POST("/backups/:id/restore", api.RestoreBackupHandler) // 恢复备份
+			authorized.DELETE("/backups/:id", api.DeleteBackupHandler)  // 删除备份
 
 			// 两步验证 (TOTP) 管理
 			authorized.GET("/totp/status", api.TOTPStatusHandler)
@@ -280,7 +289,10 @@ func main() {
 		c.Redirect(http.StatusMovedPermanently, "/dashboard/")
 	})
 
-	// 6. 启动服务
+	// 6. 启动自动更新检测
+	api.StartAutoUpdateChecker()
+
+	// 7. 启动服务
 	port := config.AppConfig.Port
 	if port == "" {
 		port = "9901"

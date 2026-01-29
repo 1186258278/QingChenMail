@@ -10,7 +10,7 @@ import (
 	"os"
 )
 
-const Version = "v1.1.1"
+const Version = "v1.2.0"
 
 type Config struct {
 	Domain         string `json:"domain"`
@@ -46,6 +46,11 @@ type Config struct {
 	CleanupQueueDays    int  `json:"cleanup_queue_days"`     // 队列记录保留天数
 	CleanupForwardDays  int  `json:"cleanup_forward_days"`   // 转发日志保留天数
 	CleanupAttachDays   int  `json:"cleanup_attach_days"`    // 附件保留天数
+
+	// 自动更新配置
+	AutoUpdateEnabled  bool   `json:"auto_update_enabled"`  // 是否启用自动更新
+	AutoUpdateInterval int    `json:"auto_update_interval"` // 检查间隔（小时），默认 24
+	AutoUpdateTime     string `json:"auto_update_time"`     // 自动更新执行时间，如 "03:00"
 
 	JWTSecret      string `json:"jwt_secret"`
 }

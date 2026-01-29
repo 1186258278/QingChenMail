@@ -12,10 +12,12 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"goemail/internal/config"
@@ -165,6 +167,14 @@ func GetUpdateStatusHandler(c *gin.Context) {
 
 // doUpdate 执行实际更新逻辑
 func doUpdate(downloadURL, fileName string) error {
+	// 0. 创建备份
+	setStatus("backing_up", 5, "正在创建备份...")
+	backupID, err := CreateBackup(config.Version, true)
+	if err != nil {
+		return fmt.Errorf("创建备份失败: %w", err)
+	}
+	setStatus("backing_up", 8, fmt.Sprintf("备份完成: %s", backupID))
+
 	// 1. 下载文件
 	setStatus("downloading", 10, "正在下载更新包...")
 
@@ -557,4 +567,236 @@ func verifyChecksum(filePath, expectedChecksum string) error {
 	}
 
 	return nil
+}
+
+// RestartHandler 重启服务
+func RestartHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"message": "正在重启服务..."})
+
+	// 延迟执行重启，让响应先返回
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		RestartSelf()
+	}()
+}
+
+// RestartSelf 重启当前程序
+func RestartSelf() {
+	exe, err := os.Executable()
+	if err != nil {
+		fmt.Printf("获取程序路径失败: %v\n", err)
+		return
+	}
+
+	exe, err = filepath.EvalSymlinks(exe)
+	if err != nil {
+		fmt.Printf("解析程序路径失败: %v\n", err)
+		return
+	}
+
+	// 检查是否有待处理的更新
+	pendingUpdate := exe + ".pending"
+	if _, err := os.Stat(pendingUpdate); err == nil {
+		// 有待处理的更新，先应用
+		if err := os.Rename(pendingUpdate, exe); err != nil {
+			fmt.Printf("应用待处理更新失败: %v\n", err)
+		}
+	}
+
+	fmt.Println("[Update] 正在重启服务...")
+
+	if runtime.GOOS == "windows" {
+		// Windows: 使用 cmd 启动新进程
+		// 创建一个批处理脚本来延迟启动
+		restartScript := filepath.Join(os.TempDir(), "goemail-restart.bat")
+		script := fmt.Sprintf(`@echo off
+ping 127.0.0.1 -n 2 > nul
+start "" "%s"
+del "%%~f0"
+`, exe)
+		if err := os.WriteFile(restartScript, []byte(script), 0755); err != nil {
+			fmt.Printf("创建重启脚本失败: %v\n", err)
+			return
+		}
+
+		cmd := exec.Command("cmd", "/C", restartScript)
+		cmd.Start()
+		os.Exit(0)
+	} else {
+		// Linux/macOS: 使用 syscall.Exec 替换当前进程
+		args := os.Args
+		env := os.Environ()
+
+		fmt.Printf("[Update] 执行: %s %v\n", exe, args)
+
+		// 使用 syscall.Exec 直接替换进程
+		err := syscall.Exec(exe, args, env)
+		if err != nil {
+			fmt.Printf("重启失败: %v\n", err)
+			// 如果 syscall.Exec 失败，尝试使用 exec.Command
+			cmd := exec.Command(exe, args[1:]...)
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			cmd.Start()
+			os.Exit(0)
+		}
+	}
+}
+
+// ============================================
+// 自动更新检测
+// ============================================
+
+var autoUpdateRunning bool
+
+// StartAutoUpdateChecker 启动自动更新检测后台任务
+func StartAutoUpdateChecker() {
+	if autoUpdateRunning {
+		return
+	}
+	autoUpdateRunning = true
+
+	go func() {
+		// 启动时等待 1 分钟，让服务完全启动
+		time.Sleep(1 * time.Minute)
+
+		for {
+			// 检查是否启用自动更新
+			if !config.AppConfig.AutoUpdateEnabled {
+				time.Sleep(1 * time.Hour) // 即使关闭也定期检查配置变化
+				continue
+			}
+
+			// 获取检查间隔
+			interval := config.AppConfig.AutoUpdateInterval
+			if interval <= 0 {
+				interval = 24 // 默认 24 小时
+			}
+
+			// 检查是否到达更新时间
+			if isAutoUpdateTime() {
+				fmt.Println("[AutoUpdate] 检查更新...")
+				
+				// 检查更新
+				info, err := checkForUpdateInternal()
+				if err != nil {
+					fmt.Printf("[AutoUpdate] 检查更新失败: %v\n", err)
+				} else if info.HasUpdate {
+					fmt.Printf("[AutoUpdate] 发现新版本: %s -> %s\n", info.CurrentVersion, info.LatestVersion)
+					
+					// 执行自动更新
+					if err := doUpdate(info.DownloadURL, info.FileName); err != nil {
+						fmt.Printf("[AutoUpdate] 自动更新失败: %v\n", err)
+					} else {
+						fmt.Println("[AutoUpdate] 更新成功，正在重启...")
+						RestartSelf()
+					}
+				} else {
+					fmt.Println("[AutoUpdate] 当前已是最新版本")
+				}
+			}
+
+			time.Sleep(time.Duration(interval) * time.Hour)
+		}
+	}()
+
+	fmt.Println("[AutoUpdate] 自动更新检测已启动")
+}
+
+// isAutoUpdateTime 检查是否到达自动更新时间
+func isAutoUpdateTime() bool {
+	updateTime := config.AppConfig.AutoUpdateTime
+	if updateTime == "" {
+		updateTime = "03:00" // 默认凌晨 3 点
+	}
+
+	// 解析配置的时间
+	parts := strings.Split(updateTime, ":")
+	if len(parts) != 2 {
+		return false
+	}
+
+	var configHour, configMin int
+	fmt.Sscanf(parts[0], "%d", &configHour)
+	fmt.Sscanf(parts[1], "%d", &configMin)
+
+	now := time.Now()
+	// 检查当前时间是否在配置时间的前后 30 分钟内
+	configTime := time.Date(now.Year(), now.Month(), now.Day(), configHour, configMin, 0, 0, now.Location())
+	diff := now.Sub(configTime)
+	
+	return diff >= 0 && diff < 30*time.Minute
+}
+
+// checkForUpdateInternal 内部使用的更新检查函数
+func checkForUpdateInternal() (*UpdateInfo, error) {
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Get("https://api.github.com/repos/1186258278/QingChenMail/releases/latest")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub API 错误: %d", resp.StatusCode)
+	}
+
+	var release GitHubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return nil, err
+	}
+
+	currentVer := config.Version
+	hasUpdate := compareVersions(release.TagName, currentVer) > 0
+	downloadURL, fileName, fileSize := findPlatformAsset(release.Assets)
+
+	return &UpdateInfo{
+		HasUpdate:      hasUpdate,
+		CurrentVersion: currentVer,
+		LatestVersion:  release.TagName,
+		ReleaseNotes:   release.Body,
+		PublishedAt:    release.PublishedAt,
+		DownloadURL:    downloadURL,
+		DownloadSize:   fileSize,
+		FileName:       fileName,
+		Platform:       fmt.Sprintf("%s/%s", runtime.GOOS, runtime.GOARCH),
+	}, nil
+}
+
+// GetAutoUpdateConfigHandler 获取自动更新配置
+func GetAutoUpdateConfigHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"enabled":  config.AppConfig.AutoUpdateEnabled,
+		"interval": config.AppConfig.AutoUpdateInterval,
+		"time":     config.AppConfig.AutoUpdateTime,
+	})
+}
+
+// UpdateAutoUpdateConfigHandler 更新自动更新配置
+func UpdateAutoUpdateConfigHandler(c *gin.Context) {
+	var req struct {
+		Enabled  bool   `json:"enabled"`
+		Interval int    `json:"interval"`
+		Time     string `json:"time"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的请求参数"})
+		return
+	}
+
+	// 更新配置
+	config.AppConfig.AutoUpdateEnabled = req.Enabled
+	config.AppConfig.AutoUpdateInterval = req.Interval
+	config.AppConfig.AutoUpdateTime = req.Time
+
+	// 保存配置
+	config.SaveConfig(config.AppConfig)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":  "自动更新配置已保存",
+		"enabled":  config.AppConfig.AutoUpdateEnabled,
+		"interval": config.AppConfig.AutoUpdateInterval,
+		"time":     config.AppConfig.AutoUpdateTime,
+	})
 }
