@@ -192,6 +192,7 @@
             <p class="text-gray-400 text-sm mt-2 font-medium" data-i18n="login.subtitle">Enterprise Mail Solution</p>
         </div>
 
+        <!-- 登录表单 (步骤1: 账号密码) -->
         <form id="login-form" onsubmit="handleLogin(event)" class="space-y-5">
             <div class="input-group">
                 <label data-i18n="login.username">账号</label>
@@ -220,8 +221,48 @@
                 进入系统
             </button>
         </form>
+
+        <!-- TOTP 表单 (步骤2: 两步验证) -->
+        <form id="totp-form" onsubmit="handleTOTPVerify(event)" class="space-y-5 hidden">
+            <div class="text-center mb-4">
+                <div class="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-800" data-i18n="login.totp_title">两步验证</h3>
+                <p class="text-sm text-gray-500 mt-1" data-i18n="login.totp_desc">请输入验证器 App 中的 6 位数字</p>
+            </div>
+
+            <div class="input-group">
+                <label data-i18n="login.totp_code">验证码</label>
+                <input type="text" id="totp-code" required maxlength="6" pattern="[0-9]{6}" 
+                       data-i18n-attr="placeholder:login.totp_code_ph" placeholder="000000"
+                       class="text-center text-2xl tracking-widest font-mono"
+                       autocomplete="one-time-code" inputmode="numeric">
+            </div>
+
+            <input type="hidden" id="totp-username">
+
+            <button type="submit" class="btn-primary" data-i18n="login.totp_verify">
+                验证
+            </button>
+
+            <button type="button" onclick="backToLogin()" class="w-full py-2 text-sm text-gray-500 hover:text-gray-700 transition">
+                <span data-i18n="login.back_to_login">返回重新登录</span>
+            </button>
+        </form>
+
+        <!-- TOTP 验证失败提示 -->
+        <div id="totp-error-hint" class="hidden mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <p class="text-xs text-amber-700 mb-1" data-i18n="login.totp_forgot">忘记或丢失验证器？</p>
+            <p class="text-xs text-amber-600">
+                <span data-i18n="login.totp_reset_tip">请在服务器终端执行</span>
+                <code class="bg-amber-100 px-1.5 py-0.5 rounded text-amber-800 font-mono text-xs select-all">./goemail -reset-totp</code>
+            </p>
+        </div>
         
-        <div class="mt-6 text-center">
+        <div id="password-help" class="mt-6 text-center">
             <p class="text-xs text-gray-400 mb-2" data-i18n="login.forgot">忘记密码？</p>
             <p class="text-xs text-gray-400">
                 <span data-i18n="login.reset_tip">请在服务器终端执行</span> 
@@ -325,8 +366,13 @@
                 const data = await res.json();
 
                 if (res.ok) {
-                    localStorage.setItem('token', data.token);
-                    window.location.href = '/dashboard/';
+                    // 检查是否需要两步验证
+                    if (data.require_totp) {
+                        showTOTPForm(data.username);
+                    } else {
+                        localStorage.setItem('token', data.token);
+                        window.location.href = '/dashboard/';
+                    }
                 } else {
                     let errorMsg = data.error;
                     if (I18n && I18n.isReady) {
@@ -338,6 +384,59 @@
                     
                     loadCaptcha();
                     document.getElementById('captcha-code').value = '';
+                }
+            } catch (err) {
+                alert('Network Error');
+            }
+        }
+
+        // 显示 TOTP 表单
+        function showTOTPForm(username) {
+            document.getElementById('login-form').classList.add('hidden');
+            document.getElementById('password-help').classList.add('hidden');
+            document.getElementById('totp-form').classList.remove('hidden');
+            document.getElementById('totp-username').value = username;
+            document.getElementById('totp-code').focus();
+        }
+
+        // 返回登录表单
+        function backToLogin() {
+            document.getElementById('totp-form').classList.add('hidden');
+            document.getElementById('totp-error-hint').classList.add('hidden');
+            document.getElementById('password-help').classList.remove('hidden');
+            document.getElementById('login-form').classList.remove('hidden');
+            document.getElementById('totp-code').value = '';
+            loadCaptcha();
+        }
+
+        // 处理 TOTP 验证
+        async function handleTOTPVerify(e) {
+            e.preventDefault();
+            const username = document.getElementById('totp-username').value;
+            const code = document.getElementById('totp-code').value;
+
+            try {
+                const res = await fetch('/api/v1/totp/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, code })
+                });
+                const data = await res.json();
+
+                if (res.ok) {
+                    localStorage.setItem('token', data.token);
+                    window.location.href = '/dashboard/';
+                } else {
+                    // 显示重置提示
+                    document.getElementById('totp-error-hint').classList.remove('hidden');
+                    
+                    let errorMsg = data.error || '验证码错误';
+                    if (I18n && I18n.isReady && data.error === '验证码错误') {
+                        errorMsg = I18n.t('login.totp_invalid');
+                    }
+                    alert(errorMsg);
+                    document.getElementById('totp-code').value = '';
+                    document.getElementById('totp-code').focus();
                 }
             } catch (err) {
                 alert('Network Error');

@@ -8,5 +8,16 @@
     "login.captcha": "Captcha",
     "login.captcha_ph": "Click to refresh",
     "login.btn": "Sign In",
-    "login.footer": "&copy; 2026 QingChen Cloud."
+    "login.footer": "&copy; 2026 QingChen Cloud.",
+    "login.forgot": "Forgot password?",
+    "login.reset_tip": "Run on server terminal",
+    "login.totp_title": "Two-Factor Authentication",
+    "login.totp_desc": "Enter the 6-digit code from your authenticator app",
+    "login.totp_code": "Code",
+    "login.totp_code_ph": "000000",
+    "login.totp_verify": "Verify",
+    "login.back_to_login": "Back to login",
+    "login.totp_forgot": "Lost your authenticator?",
+    "login.totp_reset_tip": "Run on server terminal",
+    "login.totp_invalid": "Invalid verification code"
 }

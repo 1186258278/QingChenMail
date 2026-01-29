@@ -26,6 +26,7 @@ var staticFiles embed.FS
 func main() {
 	// 命令行参数
 	resetPwd := flag.Bool("reset", false, "Reset admin password to 123456")
+	resetTOTP := flag.Bool("reset-totp", false, "Reset admin 2FA (TOTP)")
 	flag.Parse()
 
 	// 1. 加载配置
@@ -54,6 +55,21 @@ func main() {
 			user = database.User{Username: "admin", Password: hashedPassword}
 			database.DB.Create(&user)
 			fmt.Println("[SUCCESS] Admin user created with password: 123456")
+		}
+		os.Exit(0)
+	}
+
+	// 处理重置两步验证 (TOTP) 指令
+	if *resetTOTP {
+		var user database.User
+		if err := database.DB.Where("username = ?", "admin").First(&user).Error; err == nil {
+			user.TOTPEnabled = false
+			user.TOTPSecret = ""
+			database.DB.Save(&user)
+			fmt.Println("[SUCCESS] Admin 2FA (TOTP) has been disabled.")
+			fmt.Println("You can now login without two-factor authentication.")
+		} else {
+			fmt.Println("[ERROR] Admin user not found.")
 		}
 		os.Exit(0)
 	}
@@ -89,6 +105,9 @@ func main() {
 		apiGroup.GET("/captcha", api.RateLimitMiddleware(api.GetCaptchaLimiter()), api.CaptchaHandler)
 		apiGroup.GET("/wallpaper", api.WallpaperHandler)
 
+		// TOTP 两步验证 (公开接口，用于登录时验证)
+		apiGroup.POST("/totp/verify", api.RateLimitMiddleware(api.GetLoginLimiter()), api.TOTPVerifyHandler)
+
 		// 追踪接口 (公开)
 		apiGroup.GET("/track/open/:id", api.TrackOpenHandler)
 		apiGroup.GET("/track/click/:id", api.TrackClickHandler)
@@ -112,6 +131,12 @@ func main() {
 			authorized.POST("/config/kill-process", api.KillProcessHandler) // 新增
 			authorized.POST("/password", api.ChangePasswordHandler)
 			authorized.GET("/backup", api.BackupHandler)
+
+			// 两步验证 (TOTP) 管理
+			authorized.GET("/totp/status", api.TOTPStatusHandler)
+			authorized.GET("/totp/setup", api.TOTPSetupHandler)
+			authorized.POST("/totp/enable", api.TOTPEnableHandler)
+			authorized.POST("/totp/disable", api.TOTPDisableHandler)
 			
 			// SMTP 管理
 			authorized.POST("/smtp", api.CreateSMTPHandler)

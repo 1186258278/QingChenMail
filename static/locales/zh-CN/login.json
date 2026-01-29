@@ -8,5 +8,16 @@
     "login.captcha": "验证码",
     "login.captcha_ph": "点击刷新",
     "login.btn": "登 录",
-    "login.footer": "&copy; 2026 QingChen Cloud."
+    "login.footer": "&copy; 2026 QingChen Cloud.",
+    "login.forgot": "忘记密码？",
+    "login.reset_tip": "请在服务器终端执行",
+    "login.totp_title": "两步验证",
+    "login.totp_desc": "请输入验证器 App 中的 6 位数字",
+    "login.totp_code": "验证码",
+    "login.totp_code_ph": "000000",
+    "login.totp_verify": "验证",
+    "login.back_to_login": "返回重新登录",
+    "login.totp_forgot": "忘记或丢失验证器？",
+    "login.totp_reset_tip": "请在服务器终端执行",
+    "login.totp_invalid": "验证码错误"
 }

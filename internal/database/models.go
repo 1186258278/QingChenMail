@@ -139,9 +139,11 @@ type Sender struct {
 
 // User 管理员用户
 type User struct {
-	ID       uint   `gorm:"primaryKey"`
-	Username string `gorm:"uniqueIndex"`
-	Password string // 简单起见，暂存明文或简单哈希，实际应使用 bcrypt
+	ID          uint   `gorm:"primaryKey"`
+	Username    string `gorm:"uniqueIndex"`
+	Password    string // 支持明文、SHA256 或 Bcrypt 哈希
+	TOTPSecret  string `json:"-"`              // TOTP 密钥 (Base32编码)，不通过 JSON 返回
+	TOTPEnabled bool   `gorm:"default:false"`  // 是否启用两步验证 (2FA)
 }
 
 // APIKey API访问密钥

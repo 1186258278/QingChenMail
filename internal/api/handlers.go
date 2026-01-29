@@ -334,6 +334,19 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
+	// 3. 检查是否启用了两步验证 (TOTP)
+	if user.TOTPEnabled && user.TOTPSecret != "" {
+		// 用户启用了两步验证，需要进行 TOTP 验证
+		// 返回特殊状态，让前端显示 TOTP 输入框
+		c.JSON(http.StatusOK, gin.H{
+			"require_totp": true,
+			"username":     user.Username,
+			"message":      "请输入两步验证码",
+		})
+		return
+	}
+
+	// 4. 未启用 TOTP，直接签发 Token
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"username": user.Username,
 		"exp":      time.Now().Add(24 * time.Hour).Unix(),
