@@ -451,10 +451,24 @@ func (s *SMTPSession) processEmail() error {
 	
 	// 解析 MIME 邮件
 	parsed := parseMIMEMessage(rawData)
+
+	// 垃圾邮件检测
+	isSpam := false
+	spamReason := ""
+	if config.AppConfig.ReceiverSpamFilter {
+		isSpam, spamReason = detectSpam(s.from, parsed.Subject, parsed.Body)
+		if isSpam {
+			log.Printf("[Receiver] Spam detected from %s: %s", s.from, spamReason)
+		}
+	}
 	
 	// 对每个收件人进行处理
 	for _, rcpt := range s.to {
-		// 1. 保存到 Inbox
+		// 1. 保存到 Inbox (垃圾邮件也保存，但标记 Tags)
+		tags := ""
+		if isSpam {
+			tags = `["spam"]`
+		}
 		inboxItem := database.Inbox{
 			FromAddr: s.from,
 			ToAddr:   rcpt,
@@ -463,6 +477,7 @@ func (s *SMTPSession) processEmail() error {
 			RawData:  rawData,
 			RemoteIP: s.remoteIP,
 			IsRead:   false,
+			Tags:     tags,
 		}
 		database.DB.Create(&inboxItem)
 
@@ -913,4 +928,63 @@ func ReloadConfig() {
 	updateBlacklist()
 	tlsConfig = loadTLSConfig()
 	log.Println("[Receiver] Configuration reloaded")
+}
+
+// detectSpam 检测垃圾邮件
+// 返回 (是否垃圾邮件, 原因)
+func detectSpam(from, subject, body string) (bool, string) {
+	// 常见垃圾邮件关键词 (中英文)
+	spamKeywords := []string{
+		// 英文关键词
+		"viagra", "cialis", "lottery", "winner", "congratulations",
+		"nigerian prince", "inheritance", "million dollars",
+		"click here", "act now", "limited time", "free money",
+		"make money fast", "work from home", "earn cash",
+		"no obligation", "risk free", "credit card",
+		"penis enlargement", "weight loss", "diet pills",
+		// 中文关键词
+		"彩票中奖", "恭喜您获得", "免费赠送", "点击领取",
+		"低价出售", "发票代开", "刷单兼职", "网赚项目",
+		"色情", "赌博", "博彩", "六合彩",
+	}
+
+	// 转小写进行匹配
+	lowerSubject := strings.ToLower(subject)
+	lowerBody := strings.ToLower(body)
+	lowerFrom := strings.ToLower(from)
+
+	// 检查关键词
+	for _, keyword := range spamKeywords {
+		if strings.Contains(lowerSubject, keyword) {
+			return true, "subject contains spam keyword: " + keyword
+		}
+		if strings.Contains(lowerBody, keyword) {
+			return true, "body contains spam keyword: " + keyword
+		}
+	}
+
+	// 检查可疑发件人模式
+	suspiciousPatterns := []string{
+		"noreply@", "no-reply@", "donotreply@",
+		"admin@", "support@", "info@",
+	}
+	for _, pattern := range suspiciousPatterns {
+		if strings.HasPrefix(lowerFrom, pattern) {
+			// 这些模式不一定是垃圾邮件，只是可疑，跳过
+			break
+		}
+	}
+
+	// 检查大量链接 (超过 5 个链接视为可疑)
+	linkCount := strings.Count(lowerBody, "http://") + strings.Count(lowerBody, "https://")
+	if linkCount > 10 {
+		return true, fmt.Sprintf("too many links: %d", linkCount)
+	}
+
+	// 检查全大写主题 (营销邮件特征)
+	if len(subject) > 10 && subject == strings.ToUpper(subject) {
+		return true, "subject is all uppercase"
+	}
+
+	return false, ""
 }

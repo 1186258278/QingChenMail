@@ -126,7 +126,10 @@ type SMTPConfig struct {
 	IsDefault bool   `json:"is_default"` // 默认通道
 }
 
-// Sender 发件人别名 (可选，用于下拉选择 From 地址)
+// Sender 发件人别名 (预留功能，用于下拉选择 From 地址)
+// 注意: 该模型当前未启用，留作未来扩展
+// 预期功能: 允许用户配置多个发件人别名，如 "客服 <support@example.com>"
+// 在发送邮件时可从下拉列表选择发件人
 type Sender struct {
 	ID        uint           `gorm:"primaryKey" json:"id"`
 	CreatedAt time.Time      `json:"created_at"`
