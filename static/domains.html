@@ -14,10 +14,16 @@
             <h2 class="text-3xl font-bold text-gray-800" data-i18n="domains.title">域名管理</h2>
             <p class="text-gray-500 mt-1" data-i18n="domains.subtitle">配置发信域名与 DNS 验证</p>
         </div>
-        <button onclick="openModal()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition shadow-sm flex items-center">
-            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
-            <span data-i18n="domains.add_btn">添加域名</span>
-        </button>
+        <div class="flex items-center space-x-3">
+            <button onclick="openCertDrawer()" class="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition shadow-sm flex items-center">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                <span data-i18n="domains.cert_drawer_btn">证书夹</span>
+            </button>
+            <button onclick="openModal()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition shadow-sm flex items-center">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+                <span data-i18n="domains.add_btn">添加域名</span>
+            </button>
+        </div>
     </div>
 
     <!-- 域名列表 -->
@@ -95,6 +101,142 @@
                     <button type="submit" class="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 shadow-md transition" data-i18n="domains.modal.save_rule">保存规则</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- 证书夹侧边栏 -->
+    <div id="cert-drawer-backdrop" class="fixed inset-0 bg-black bg-opacity-30 hidden z-40" onclick="closeCertDrawer()"></div>
+    <div id="cert-drawer" class="fixed inset-y-0 right-0 w-[420px] bg-white shadow-2xl transform translate-x-full transition-transform duration-300 z-50 flex flex-col">
+        <!-- 头部 -->
+        <div class="p-4 border-b flex justify-between items-center bg-gradient-to-r from-emerald-500 to-teal-600 text-white">
+            <h3 class="text-lg font-bold flex items-center">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                <span data-i18n="domains.cert.drawer_title">证书夹</span>
+            </h3>
+            <button onclick="closeCertDrawer()" class="hover:bg-white/20 rounded p-1 transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        
+        <!-- 操作按钮 -->
+        <div class="p-4 border-b flex space-x-2">
+            <button onclick="openUploadCertModal()" class="flex-1 bg-emerald-600 text-white px-3 py-2 rounded-lg hover:bg-emerald-700 transition text-sm flex items-center justify-center">
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                <span data-i18n="domains.cert.upload_btn">上传证书</span>
+            </button>
+            <button onclick="openAcmeModal()" class="flex-1 bg-blue-600 text-white px-3 py-2 rounded-lg hover:bg-blue-700 transition text-sm flex items-center justify-center">
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                <span data-i18n="domains.cert.acme_btn">申请免费证书</span>
+            </button>
+        </div>
+        
+        <!-- 证书列表 -->
+        <div id="cert-list" class="flex-1 overflow-y-auto p-4 space-y-3">
+            <div class="text-center text-gray-400 py-8">
+                <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                <p data-i18n="domains.cert.loading">加载中...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 上传证书模态框 -->
+    <div id="upload-cert-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-[60] flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl p-6 w-[550px] shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h3 class="font-bold text-xl mb-4 text-gray-800 flex items-center">
+                <svg class="w-6 h-6 mr-2 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                <span data-i18n="domains.cert.upload_title">上传 SSL 证书</span>
+            </h3>
+            <form onsubmit="uploadCertificate(event)">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1" data-i18n="domains.cert.name_label">证书名称 (可选)</label>
+                    <input type="text" id="cert-name" placeholder="例如: mail.example.com" class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-emerald-500 outline-none">
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        <span data-i18n="domains.cert.cert_pem_label">证书内容 (PEM 格式)</span>
+                        <span class="text-red-500">*</span>
+                    </label>
+                    <textarea id="cert-pem" required rows="6" placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----" class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-emerald-500 outline-none font-mono text-xs"></textarea>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                        <span data-i18n="domains.cert.key_pem_label">私钥内容 (PEM 格式)</span>
+                        <span class="text-red-500">*</span>
+                    </label>
+                    <textarea id="key-pem" required rows="6" placeholder="-----BEGIN PRIVATE KEY-----&#10;...&#10;-----END PRIVATE KEY-----" class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-emerald-500 outline-none font-mono text-xs"></textarea>
+                </div>
+                <div class="bg-amber-50 text-amber-700 text-xs p-3 rounded-lg mb-4">
+                    <p class="font-medium mb-1" data-i18n="domains.cert.upload_tip_title">提示</p>
+                    <p data-i18n="domains.cert.upload_tip">上传后系统会自动解析证书信息（域名、有效期等）。私钥将加密存储。</p>
+                </div>
+                <div class="flex justify-end space-x-3">
+                    <button type="button" onclick="closeUploadCertModal()" class="px-5 py-2 text-gray-500 hover:bg-gray-100 rounded-lg transition" data-i18n="common.cancel">取消</button>
+                    <button type="submit" class="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 shadow-md transition" data-i18n="domains.cert.upload_submit">上传证书</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ACME 申请证书模态框 -->
+    <div id="acme-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-[60] flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-white rounded-xl p-6 w-[550px] shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h3 class="font-bold text-xl mb-4 text-gray-800 flex items-center">
+                <svg class="w-6 h-6 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                <span data-i18n="domains.cert.acme_title">申请免费 SSL 证书</span>
+            </h3>
+            
+            <!-- 步骤 1: 填写信息 -->
+            <div id="acme-step1">
+                <div class="bg-blue-50 text-blue-700 text-sm p-3 rounded-lg mb-4">
+                    <p class="font-medium mb-1">Let's Encrypt 免费证书</p>
+                    <p data-i18n="domains.cert.acme_desc">使用 DNS-01 验证方式申请证书，无需开放 80/443 端口。证书有效期 90 天，到期前可续期。</p>
+                </div>
+                <form onsubmit="initAcmeChallenge(event)">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            <span data-i18n="domains.cert.acme_domain">域名</span>
+                            <span class="text-red-500">*</span>
+                        </label>
+                        <input type="text" id="acme-domain" required placeholder="例如: mail.example.com" class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            <span data-i18n="domains.cert.acme_email">邮箱</span>
+                            <span class="text-red-500">*</span>
+                        </label>
+                        <input type="email" id="acme-email" required placeholder="用于接收证书到期通知" class="w-full border rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" onclick="closeAcmeModal()" class="px-5 py-2 text-gray-500 hover:bg-gray-100 rounded-lg transition" data-i18n="common.cancel">取消</button>
+                        <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md transition" data-i18n="domains.cert.acme_init">开始申请</button>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- 步骤 2: 添加 DNS 记录 -->
+            <div id="acme-step2" class="hidden">
+                <div class="bg-amber-50 text-amber-700 text-sm p-4 rounded-lg mb-4">
+                    <p class="font-medium mb-2" data-i18n="domains.cert.acme_dns_title">请添加以下 DNS TXT 记录</p>
+                    <div class="bg-white rounded p-3 font-mono text-xs space-y-2">
+                        <div>
+                            <span class="text-gray-500">记录类型:</span> <span class="font-bold">TXT</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">主机记录:</span> <span id="acme-txt-record" class="font-bold select-all">-</span>
+                            <button onclick="copyToClipboard(document.getElementById('acme-txt-record').innerText)" class="ml-2 text-blue-500 hover:text-blue-700">复制</button>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">记录值:</span> <span id="acme-txt-value" class="font-bold select-all break-all">-</span>
+                            <button onclick="copyToClipboard(document.getElementById('acme-txt-value').innerText)" class="ml-2 text-blue-500 hover:text-blue-700">复制</button>
+                        </div>
+                    </div>
+                </div>
+                <p class="text-sm text-gray-600 mb-4" data-i18n="domains.cert.acme_dns_hint">添加 DNS 记录后，请等待 1-5 分钟让 DNS 生效，然后点击验证。</p>
+                <div class="flex justify-end space-x-3">
+                    <button type="button" onclick="cancelAcmeChallenge()" class="px-5 py-2 text-gray-500 hover:bg-gray-100 rounded-lg transition" data-i18n="common.cancel">取消</button>
+                    <button type="button" onclick="verifyAcmeChallenge()" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-md transition" data-i18n="domains.cert.acme_verify">验证并获取证书</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -594,6 +736,240 @@
             } catch (e) {
                 showToast('删除失败', 'error');
             }
+        }
+
+        // ========== 证书夹功能 ==========
+        let allCertificates = [];
+        let currentAcmeDomain = '';
+
+        function openCertDrawer() {
+            document.getElementById('cert-drawer').classList.remove('translate-x-full');
+            document.getElementById('cert-drawer-backdrop').classList.remove('hidden');
+            loadCertificates();
+        }
+
+        function closeCertDrawer() {
+            document.getElementById('cert-drawer').classList.add('translate-x-full');
+            document.getElementById('cert-drawer-backdrop').classList.add('hidden');
+        }
+
+        async function loadCertificates() {
+            const container = document.getElementById('cert-list');
+            try {
+                const certs = await request('/certs');
+                allCertificates = certs;
+                
+                if (!certs || certs.length === 0) {
+                    container.innerHTML = `
+                        <div class="text-center text-gray-400 py-8">
+                            <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            <p data-i18n="domains.cert.empty">暂无证书</p>
+                            <p class="text-xs mt-1" data-i18n="domains.cert.empty_hint">点击上方按钮上传或申请证书</p>
+                        </div>`;
+                    if (typeof I18n !== 'undefined' && I18n.isReady) I18n.render();
+                    return;
+                }
+
+                container.innerHTML = certs.map(c => {
+                    const statusClass = {
+                        'valid': 'bg-green-100 text-green-700',
+                        'warning': 'bg-yellow-100 text-yellow-700',
+                        'critical': 'bg-red-100 text-red-700',
+                        'expired': 'bg-gray-100 text-gray-500'
+                    }[c.status] || 'bg-gray-100 text-gray-500';
+                    
+                    const statusIcon = {
+                        'valid': '✅',
+                        'warning': '⚠️',
+                        'critical': '🔴',
+                        'expired': '❌'
+                    }[c.status] || '❓';
+
+                    const sourceLabel = c.source === 'letsencrypt' ? "Let's Encrypt" : '手动上传';
+                    
+                    return `
+                        <div class="bg-white border rounded-lg p-4 shadow-sm hover:shadow-md transition">
+                            <div class="flex justify-between items-start mb-2">
+                                <div class="flex-1 min-w-0">
+                                    <h4 class="font-medium text-gray-800 truncate" title="${c.domains.join(', ')}">${c.domains[0] || c.name || '未知'}</h4>
+                                    ${c.domains.length > 1 ? `<p class="text-xs text-gray-400">+${c.domains.length - 1} 个域名</p>` : ''}
+                                </div>
+                                <span class="text-xs px-2 py-0.5 rounded ${statusClass} flex-shrink-0 ml-2">
+                                    ${statusIcon} ${c.days_left >= 0 ? c.days_left + '天' : '已过期'}
+                                </span>
+                            </div>
+                            <div class="text-xs text-gray-500 space-y-1">
+                                <p><span class="text-gray-400">颁发者:</span> ${c.issuer || '未知'}</p>
+                                <p><span class="text-gray-400">到期:</span> ${new Date(c.not_after).toLocaleDateString()}</p>
+                                <p><span class="text-gray-400">来源:</span> ${sourceLabel}</p>
+                            </div>
+                            <div class="mt-3 flex justify-end space-x-2">
+                                <button onclick="applyCertToSTARTTLS(${c.id})" class="text-xs px-2 py-1 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded transition" data-i18n="domains.cert.apply_starttls">应用到STARTTLS</button>
+                                <button onclick="deleteCertificate(${c.id})" class="text-xs px-2 py-1 text-red-500 hover:bg-red-50 rounded transition" data-i18n="common.delete">删除</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+                if (typeof I18n !== 'undefined' && I18n.isReady) I18n.render();
+            } catch (e) {
+                console.error('加载证书失败', e);
+                container.innerHTML = `<div class="text-center text-red-500 py-4">加载失败: ${e.message}</div>`;
+            }
+        }
+
+        // 上传证书
+        function openUploadCertModal() {
+            document.getElementById('upload-cert-modal').classList.remove('hidden');
+            document.getElementById('cert-name').value = '';
+            document.getElementById('cert-pem').value = '';
+            document.getElementById('key-pem').value = '';
+        }
+
+        function closeUploadCertModal() {
+            document.getElementById('upload-cert-modal').classList.add('hidden');
+        }
+
+        async function uploadCertificate(e) {
+            e.preventDefault();
+            const name = document.getElementById('cert-name').value;
+            const certPem = document.getElementById('cert-pem').value;
+            const keyPem = document.getElementById('key-pem').value;
+
+            try {
+                await request('/certs', {
+                    method: 'POST',
+                    body: JSON.stringify({ name, cert_pem: certPem, key_pem: keyPem })
+                });
+                closeUploadCertModal();
+                loadCertificates();
+                showToast(I18n.t('domains.cert.upload_success') || '证书上传成功');
+            } catch (err) {
+                showToast(err.message || '上传失败', 'error');
+            }
+        }
+
+        // ACME 申请证书
+        function openAcmeModal() {
+            document.getElementById('acme-modal').classList.remove('hidden');
+            document.getElementById('acme-step1').classList.remove('hidden');
+            document.getElementById('acme-step2').classList.add('hidden');
+            document.getElementById('acme-domain').value = '';
+            document.getElementById('acme-email').value = '';
+        }
+
+        function closeAcmeModal() {
+            document.getElementById('acme-modal').classList.add('hidden');
+            currentAcmeDomain = '';
+        }
+
+        async function initAcmeChallenge(e) {
+            e.preventDefault();
+            const domain = document.getElementById('acme-domain').value;
+            const email = document.getElementById('acme-email').value;
+            currentAcmeDomain = domain;
+
+            try {
+                const result = await request('/certs/acme/init', {
+                    method: 'POST',
+                    body: JSON.stringify({ domain, email, dns_provider: 'manual' })
+                });
+                
+                // 显示 DNS 记录
+                document.getElementById('acme-txt-record').innerText = result.txt_record;
+                document.getElementById('acme-txt-value').innerText = result.txt_value;
+                
+                // 切换到步骤 2
+                document.getElementById('acme-step1').classList.add('hidden');
+                document.getElementById('acme-step2').classList.remove('hidden');
+                
+                showToast(I18n.t('domains.cert.acme_init_success') || '请添加 DNS 记录');
+            } catch (err) {
+                showToast(err.message || '初始化失败', 'error');
+            }
+        }
+
+        async function verifyAcmeChallenge() {
+            if (!currentAcmeDomain) {
+                showToast('域名信息丢失，请重新开始', 'error');
+                return;
+            }
+
+            try {
+                await request('/certs/acme/verify', {
+                    method: 'POST',
+                    body: JSON.stringify({ domain: currentAcmeDomain })
+                });
+                
+                closeAcmeModal();
+                loadCertificates();
+                showToast(I18n.t('domains.cert.acme_success') || '证书申请成功！');
+            } catch (err) {
+                showToast(err.message || '验证失败，请确保 DNS 记录已正确添加', 'error');
+            }
+        }
+
+        async function cancelAcmeChallenge() {
+            if (currentAcmeDomain) {
+                try {
+                    await request(`/certs/acme/challenge/${currentAcmeDomain}`, { method: 'DELETE' });
+                } catch (e) {}
+            }
+            closeAcmeModal();
+        }
+
+        // 应用证书到 STARTTLS
+        async function applyCertToSTARTTLS(certId) {
+            if (!confirm(I18n.t('domains.cert.apply_confirm') || '确定要将此证书应用到 STARTTLS 配置吗？应用后需要重启服务生效。')) {
+                return;
+            }
+
+            try {
+                await request(`/certs/${certId}/apply-starttls`, { method: 'POST' });
+                showToast(I18n.t('domains.cert.apply_success') || '证书已应用，请重启服务生效');
+            } catch (err) {
+                showToast(err.message || '应用失败', 'error');
+            }
+        }
+
+        // 删除证书
+        async function deleteCertificate(certId) {
+            if (!confirm(I18n.t('domains.cert.delete_confirm') || '确定要删除此证书吗？')) {
+                return;
+            }
+
+            try {
+                await request(`/certs/${certId}`, { method: 'DELETE' });
+                loadCertificates();
+                showToast(I18n.t('common.deleted') || '已删除');
+            } catch (err) {
+                showToast(err.message || '删除失败', 'error');
+            }
+        }
+
+        // 复制到剪贴板
+        function copyToClipboard(text) {
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(() => showToast('已复制')).catch(() => fallbackCopy(text));
+            } else {
+                fallbackCopy(text);
+            }
+        }
+
+        function fallbackCopy(text) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            try {
+                document.execCommand('copy');
+                showToast('已复制');
+            } catch (e) {
+                showToast('复制失败', 'error');
+            }
+            document.body.removeChild(ta);
         }
         
         loadDomains();

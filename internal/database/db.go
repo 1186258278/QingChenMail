@@ -55,6 +55,7 @@ func InitDB() {
 		&SchemaVersion{}, // 核心版本控制表
 		&User{},
 		&SMTPConfig{},
+		&Certificate{}, // 证书管理 (需要在 Domain 之前创建，因为 Domain 引用它)
 		&Domain{},
 		&Template{},
 		&EmailLog{},

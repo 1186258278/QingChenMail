@@ -10,6 +10,7 @@ import (
 	"os"
 
 	"goemail/internal/api"
+	"goemail/internal/cert"
 	"goemail/internal/cleanup"
 	"goemail/internal/config"
 	"goemail/internal/database"
@@ -68,6 +69,10 @@ func main() {
 
 	// 启动数据清理调度器
 	cleanup.StartScheduler()
+
+	// 初始化证书管理器并启动证书检查调度器
+	api.InitCertManager()
+	cert.StartScheduler()
 
 	// 3. 设置 Gin
 	gin.SetMode(gin.ReleaseMode)
@@ -195,6 +200,25 @@ func main() {
 			authorized.PUT("/cleanup/config", api.UpdateCleanupConfigHandler)
 			authorized.POST("/cleanup/run", api.RunCleanupHandler)
 			authorized.GET("/cleanup/status", api.GetCleanupStatusHandler)
+
+			// 证书管理
+			authorized.GET("/certs", api.GetCertificatesHandler)
+			authorized.POST("/certs", api.UploadCertificateHandler)
+			authorized.GET("/certs/expiring", api.GetExpiringSoonHandler)
+			authorized.GET("/certs/match/:domain", api.GetMatchingCertsHandler)
+			authorized.GET("/certs/:id", api.GetCertificateHandler)
+			authorized.DELETE("/certs/:id", api.DeleteCertificateHandler)
+			authorized.POST("/certs/:id/apply-starttls", api.ApplyCertToSTARTTLSHandler)
+			authorized.POST("/certs/:id/renew", api.RenewCertificateHandler)
+
+			// ACME (Let's Encrypt) 证书申请
+			authorized.POST("/certs/acme/init", api.ACMEInitHandler)
+			authorized.POST("/certs/acme/verify", api.ACMEVerifyHandler)
+			authorized.GET("/certs/acme/challenge/:domain", api.ACMEChallengeStatusHandler)
+			authorized.DELETE("/certs/acme/challenge/:domain", api.ACMECancelHandler)
+
+			// 域名证书关联
+			authorized.PUT("/domains/:id/cert", api.UpdateDomainCertHandler)
 		}
 	}
 

@@ -176,6 +176,38 @@ type Domain struct {
 	DKIMVerified  bool `json:"dkim_verified"`
 	DMARCVerified bool `json:"dmarc_verified"`
 	MXVerified    bool `json:"mx_verified"`
+
+	// 关联的 SSL 证书 (用于 STARTTLS)
+	CertificateID *uint        `json:"certificate_id" gorm:"index"`
+	Certificate   *Certificate `json:"certificate,omitempty" gorm:"foreignKey:CertificateID"`
+}
+
+// Certificate SSL证书（独立管理）
+type Certificate struct {
+	ID        uint           `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+
+	Name     string `json:"name" gorm:"size:100"`    // 证书名称/备注
+	Domains  string `json:"domains" gorm:"size:500"` // 证书包含的域名，逗号分隔 (如 "mail.example.com,*.example.com")
+	CertPEM  string `json:"-" gorm:"type:text"`      // 证书内容 (PEM格式，不返回给前端)
+	KeyPEM   string `json:"-" gorm:"type:text"`      // 私钥内容 (PEM格式，加密存储，不返回给前端)
+	CertPath string `json:"cert_path"`               // 证书文件路径
+	KeyPath  string `json:"key_path"`                // 私钥文件路径
+
+	Issuer    string    `json:"issuer" gorm:"size:100"` // 颁发机构 (如 "Let's Encrypt", "DigiCert", "Self-Signed")
+	NotBefore time.Time `json:"not_before"`             // 生效时间
+	NotAfter  time.Time `json:"not_after"`              // 到期时间
+
+	Source      string `json:"source" gorm:"size:20"`       // 来源: manual / letsencrypt
+	AutoRenew   bool   `json:"auto_renew"`                  // 是否自动续期 (仅 letsencrypt)
+	DNSProvider string `json:"dns_provider" gorm:"size:30"` // DNS提供商 (manual/cloudflare/aliyun/dnspod)
+	DNSConfig   string `json:"-" gorm:"type:text"`          // DNS API配置 (加密存储，不返回给前端)
+
+	// ACME 相关 (Let's Encrypt)
+	ACMEAccountKey string `json:"-" gorm:"type:text"` // ACME 账户私钥
+	ACMEEmail      string `json:"acme_email"`         // ACME 注册邮箱
 }
 
 // Template 邮件模板
