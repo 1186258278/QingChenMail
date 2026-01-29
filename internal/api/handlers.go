@@ -871,6 +871,12 @@ func GetConfigHandler(c *gin.Context) {
 		"enable_receiver":   cfg.EnableReceiver,
 		"receiver_port":     cfg.ReceiverPort,
 		"receiver_tls":      cfg.ReceiverTLS,
+		"receiver_tls_cert": cfg.ReceiverTLSCert,
+		"receiver_tls_key":  cfg.ReceiverTLSKey,
+		"receiver_rate_limit":    cfg.ReceiverRateLimit,
+		"receiver_max_msg_size":  cfg.ReceiverMaxMsgSize,
+		"receiver_blacklist":     cfg.ReceiverBlacklist,
+		"receiver_require_tls":   cfg.ReceiverRequireTLS,
 		"jwt_secret":        "****** (Hidden)", // 隐藏 JWT Secret
 	}
 	
