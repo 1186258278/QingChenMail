@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,26 +8,101 @@
     <meta name="keywords" content="邮件系统,自建邮局,SMTP,邮件营销,企业邮件,Go,开源">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📧</text></svg>">
     
-    <!-- Open Graph -->
-    <meta property="og:title" content="晴辰云邮 - 企业级自建邮件系统">
-    <meta property="og:description" content="发送/接收/营销一站式解决方案，一次部署永久免费">
-    <meta property="og:type" content="website">
+    <!-- 防止主题闪烁 -->
+    <script>
+    (function() {
+        const saved = localStorage.getItem('theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const theme = saved || (prefersDark ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+    })();
+    </script>
     
     <style>
+        /* ========== 设计令牌 ========== */
         :root {
-            --primary: #2563eb;
-            --primary-dark: #1d4ed8;
-            --secondary: #0ea5e9;
-            --accent: #06b6d4;
-            --bg-dark: #0f172a;
-            --bg-card: #1e293b;
-            --text-primary: #f1f5f9;
-            --text-secondary: #94a3b8;
-            --border: #334155;
-            --success: #10b981;
-            --warning: #f59e0b;
+            /* 缓动函数 */
+            --ease-out: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+            --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            
+            /* 圆角 */
+            --radius-xl: 24px;
+            --radius-lg: 20px;
+            --radius-md: 12px;
+            --radius-sm: 8px;
+            --radius-pill: 9999px;
         }
 
+        /* 亮色主题 */
+        [data-theme="light"] {
+            --bg-gradient: linear-gradient(180deg, #F2F2F7 0%, #E5E5EA 100%);
+            --glass-primary: rgba(255, 255, 255, 0.7);
+            --glass-secondary: rgba(255, 255, 255, 0.6);
+            --glass-tertiary: rgba(255, 255, 255, 0.5);
+            --glass-border: rgba(255, 255, 255, 0.5);
+            --glass-border-subtle: rgba(0, 0, 0, 0.08);
+            --primary: #007AFF;
+            --primary-gradient: linear-gradient(135deg, #007AFF 0%, #5856D6 100%);
+            --success: #34C759;
+            --warning: #FF9500;
+            --danger: #FF3B30;
+            --text-primary: #1C1C1E;
+            --text-secondary: #3C3C43;
+            --text-tertiary: #8E8E93;
+            --shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.06);
+            --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.08);
+            --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.12);
+            --glow-blue: rgba(0, 122, 255, 0.3);
+            --glow-purple: rgba(88, 86, 214, 0.25);
+        }
+
+        /* 暗色主题 */
+        [data-theme="dark"] {
+            --bg-gradient: linear-gradient(180deg, #000000 0%, #1C1C1E 100%);
+            --glass-primary: rgba(44, 44, 46, 0.8);
+            --glass-secondary: rgba(44, 44, 46, 0.7);
+            --glass-tertiary: rgba(44, 44, 46, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --glass-border-subtle: rgba(255, 255, 255, 0.06);
+            --primary: #0A84FF;
+            --primary-gradient: linear-gradient(135deg, #0A84FF 0%, #5E5CE6 100%);
+            --success: #30D158;
+            --warning: #FF9F0A;
+            --danger: #FF453A;
+            --text-primary: #FFFFFF;
+            --text-secondary: #EBEBF5;
+            --text-tertiary: #8E8E93;
+            --shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.5);
+            --glow-blue: rgba(10, 132, 255, 0.4);
+            --glow-purple: rgba(94, 92, 230, 0.35);
+        }
+
+        /* ========== View Transitions ========== */
+        ::view-transition-old(root),
+        ::view-transition-new(root) {
+            animation: none;
+            mix-blend-mode: normal;
+        }
+
+        ::view-transition-new(root) {
+            z-index: 1;
+            animation: circleReveal 0.7s var(--ease-in-out) forwards;
+        }
+
+        ::view-transition-old(root) {
+            z-index: 0;
+        }
+
+        @keyframes circleReveal {
+            from { clip-path: circle(0% at var(--reveal-x, 100%) var(--reveal-y, 0%)); }
+            to { clip-path: circle(150% at var(--reveal-x, 100%) var(--reveal-y, 0%)); }
+        }
+
+        /* ========== 基础样式 ========== */
         * {
             margin: 0;
             padding: 0;
@@ -35,38 +110,85 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
-            background: var(--bg-dark);
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
+            background: var(--bg-gradient);
+            min-height: 100vh;
             color: var(--text-primary);
             line-height: 1.6;
             overflow-x: hidden;
+            transition: background 0.3s ease;
         }
 
-        /* 动态背景 */
-        .bg-gradient {
+        /* ========== 背景光晕 ========== */
+        .glow-container {
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            background: 
-                radial-gradient(ellipse at 20% 20%, rgba(37, 99, 235, 0.15) 0%, transparent 50%),
-                radial-gradient(ellipse at 80% 80%, rgba(6, 182, 212, 0.1) 0%, transparent 50%),
-                radial-gradient(ellipse at 50% 50%, rgba(14, 165, 233, 0.05) 0%, transparent 70%);
             pointer-events: none;
-            z-index: -1;
+            overflow: hidden;
+            z-index: 0;
         }
 
-        /* 导航栏 */
+        .glow-blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.6;
+            animation: float 20s ease-in-out infinite;
+        }
+
+        .glow-blue {
+            width: 50%;
+            height: 50%;
+            top: -10%;
+            right: -10%;
+            background: var(--glow-blue);
+        }
+
+        .glow-purple {
+            width: 40%;
+            height: 40%;
+            bottom: 10%;
+            left: -5%;
+            background: var(--glow-purple);
+            animation-delay: -7s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(30px, -30px) scale(1.05); }
+            66% { transform: translate(-20px, 20px) scale(0.95); }
+        }
+
+        /* ========== 玻璃效果 ========== */
+        .glass-primary {
+            background: var(--glass-primary);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--shadow-md);
+        }
+
+        .glass-secondary {
+            background: var(--glass-secondary);
+            backdrop-filter: blur(16px) saturate(150%);
+            -webkit-backdrop-filter: blur(16px) saturate(150%);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* ========== 导航栏 ========== */
         nav {
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            padding: 1rem 2rem;
-            background: rgba(15, 23, 42, 0.8);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid var(--border);
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: calc(100% - 32px);
+            max-width: 1200px;
+            padding: 12px 24px;
+            border-radius: var(--radius-lg);
             z-index: 1000;
             display: flex;
             justify-content: space-between;
@@ -76,88 +198,103 @@
         .logo {
             display: flex;
             align-items: center;
-            gap: 0.75rem;
-            font-size: 1.25rem;
-            font-weight: 700;
-            color: var(--text-primary);
+            gap: 10px;
             text-decoration: none;
+            color: var(--text-primary);
         }
 
         .logo-icon {
-            width: 36px;
-            height: 36px;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
-            border-radius: 8px;
+            width: 40px;
+            height: 40px;
+            background: var(--primary-gradient);
+            border-radius: var(--radius-md);
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 1.25rem;
+            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.3);
         }
 
-        .nav-links {
+        .logo-text {
+            font-size: 1.125rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+
+        .nav-actions {
             display: flex;
-            gap: 2rem;
-            list-style: none;
-        }
-
-        .nav-links a {
-            color: var(--text-secondary);
-            text-decoration: none;
-            font-size: 0.9rem;
-            transition: color 0.2s;
-        }
-
-        .nav-links a:hover {
-            color: var(--text-primary);
+            align-items: center;
+            gap: 8px;
         }
 
         .nav-btn {
-            padding: 0.5rem 1.25rem;
-            background: var(--primary);
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-size: 0.9rem;
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--glass-border-subtle);
+            background: var(--glass-tertiary);
+            color: var(--text-secondary);
             cursor: pointer;
-            text-decoration: none;
-            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.125rem;
+            transition: all 0.2s var(--ease-out);
         }
 
         .nav-btn:hover {
-            background: var(--primary-dark);
+            background: var(--glass-secondary);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-sm);
         }
 
-        /* Hero 区域 */
+        .nav-btn:active {
+            transform: scale(0.95);
+        }
+
+        .github-btn {
+            padding: 10px 18px;
+            width: auto;
+            gap: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            text-decoration: none;
+            color: var(--text-primary);
+        }
+
+        /* ========== Hero 区域 ========== */
         .hero {
+            position: relative;
+            z-index: 1;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
             text-align: center;
-            padding: 6rem 2rem 4rem;
+            padding: 120px 24px 80px;
         }
 
         .version-badge {
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 1rem;
-            background: rgba(37, 99, 235, 0.2);
-            border: 1px solid rgba(37, 99, 235, 0.3);
-            border-radius: 20px;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: var(--radius-pill);
             font-size: 0.85rem;
-            color: var(--secondary);
-            margin-bottom: 1.5rem;
-            cursor: pointer;
-            transition: all 0.2s;
+            color: var(--primary);
+            text-decoration: none;
+            margin-bottom: 24px;
+            transition: all 0.3s var(--ease-out);
+            animation: fadeInUp 0.6s var(--ease-out) forwards;
         }
 
         .version-badge:hover {
-            background: rgba(37, 99, 235, 0.3);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
         }
 
-        .version-badge .dot {
+        .badge-dot {
             width: 8px;
             height: 8px;
             background: var(--success);
@@ -166,271 +303,299 @@
         }
 
         @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(0.9); }
         }
 
         .hero h1 {
-            font-size: clamp(2.5rem, 6vw, 4rem);
-            font-weight: 800;
-            line-height: 1.2;
-            margin-bottom: 1rem;
-            background: linear-gradient(135deg, var(--text-primary) 0%, var(--secondary) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            font-size: clamp(2.5rem, 8vw, 4.5rem);
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            line-height: 1.1;
+            margin-bottom: 16px;
+            animation: fadeInUp 0.6s var(--ease-out) 0.1s forwards;
+            opacity: 0;
         }
 
-        .hero h1 span {
-            display: block;
-            font-size: 0.5em;
-            color: var(--text-secondary);
-            -webkit-text-fill-color: var(--text-secondary);
-            font-weight: 400;
-            margin-top: 0.5rem;
+        .hero-subtitle {
+            font-size: 1.125rem;
+            color: var(--text-tertiary);
+            margin-bottom: 8px;
+            animation: fadeInUp 0.6s var(--ease-out) 0.15s forwards;
+            opacity: 0;
         }
 
         .hero-desc {
             font-size: 1.25rem;
             color: var(--text-secondary);
-            max-width: 600px;
-            margin-bottom: 2.5rem;
+            max-width: 500px;
+            margin-bottom: 40px;
+            animation: fadeInUp 0.6s var(--ease-out) 0.2s forwards;
+            opacity: 0;
         }
 
-        .hero-buttons {
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ========== 按钮 ========== */
+        .btn-group {
             display: flex;
-            gap: 1rem;
+            gap: 12px;
             flex-wrap: wrap;
             justify-content: center;
+            animation: fadeInUp 0.6s var(--ease-out) 0.25s forwards;
+            opacity: 0;
         }
 
         .btn {
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
-            padding: 0.875rem 1.75rem;
-            border-radius: 8px;
+            gap: 8px;
+            padding: 14px 28px;
+            border-radius: var(--radius-md);
             font-size: 1rem;
             font-weight: 500;
             text-decoration: none;
-            transition: all 0.2s;
             cursor: pointer;
             border: none;
+            transition: all 0.3s var(--ease-out);
+            position: relative;
+            overflow: hidden;
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            color: white;
-            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
+            background: var(--primary-gradient);
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(0, 122, 255, 0.35);
         }
 
         .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 30px rgba(0, 122, 255, 0.45);
         }
 
         .btn-secondary {
-            background: var(--bg-card);
+            background: var(--glass-secondary);
+            backdrop-filter: blur(10px);
             color: var(--text-primary);
-            border: 1px solid var(--border);
+            border: 1px solid var(--glass-border-subtle);
         }
 
         .btn-secondary:hover {
-            background: var(--border);
+            background: var(--glass-primary);
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-md);
         }
 
-        /* 统计数据 */
+        .btn:active {
+            transform: scale(0.97);
+        }
+
+        /* 水波纹效果 */
+        .btn::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 50%;
+            left: 50%;
+            background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
+            transform: translate(-50%, -50%) scale(0);
+            opacity: 0;
+            transition: transform 0.5s, opacity 0.5s;
+        }
+
+        .btn:active::after {
+            transform: translate(-50%, -50%) scale(2);
+            opacity: 1;
+            transition: 0s;
+        }
+
+        /* ========== 统计卡片 ========== */
         .stats {
             display: flex;
-            gap: 3rem;
-            margin-top: 4rem;
-            padding: 2rem;
-            background: rgba(30, 41, 59, 0.5);
-            border-radius: 16px;
-            border: 1px solid var(--border);
+            gap: 24px;
+            margin-top: 60px;
+            padding: 24px 32px;
+            border-radius: var(--radius-xl);
+            animation: fadeInUp 0.6s var(--ease-out) 0.3s forwards;
+            opacity: 0;
         }
 
         .stat-item {
             text-align: center;
+            padding: 0 16px;
+        }
+
+        .stat-item:not(:last-child) {
+            border-right: 1px solid var(--glass-border-subtle);
         }
 
         .stat-value {
             font-size: 2rem;
             font-weight: 700;
-            color: var(--secondary);
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
         .stat-label {
             font-size: 0.85rem;
-            color: var(--text-secondary);
+            color: var(--text-tertiary);
+            margin-top: 4px;
         }
 
-        /* 功能特性 */
-        .features {
-            padding: 6rem 2rem;
+        /* ========== 功能区域 ========== */
+        .section {
+            position: relative;
+            z-index: 1;
+            padding: 80px 24px;
             max-width: 1200px;
             margin: 0 auto;
         }
 
-        .section-title {
+        .section-header {
             text-align: center;
-            margin-bottom: 3rem;
+            margin-bottom: 48px;
         }
 
-        .section-title h2 {
+        .section-header h2 {
             font-size: 2rem;
-            margin-bottom: 0.5rem;
+            font-weight: 600;
+            margin-bottom: 12px;
         }
 
-        .section-title p {
-            color: var(--text-secondary);
+        .section-header p {
+            color: var(--text-tertiary);
+            font-size: 1.125rem;
         }
 
+        /* ========== 功能卡片 ========== */
         .features-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 1.5rem;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
         }
 
         .feature-card {
-            padding: 2rem;
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            transition: all 0.3s;
+            padding: 28px;
+            border-radius: var(--radius-lg);
+            transition: all 0.4s var(--ease-out);
+            cursor: default;
         }
 
         .feature-card:hover {
-            transform: translateY(-4px);
-            border-color: var(--primary);
-            box-shadow: 0 10px 30px rgba(37, 99, 235, 0.1);
+            transform: translateY(-6px);
+            box-shadow: var(--shadow-lg);
         }
 
         .feature-icon {
-            width: 48px;
-            height: 48px;
-            background: linear-gradient(135deg, rgba(37, 99, 235, 0.2) 0%, rgba(6, 182, 212, 0.2) 100%);
-            border-radius: 10px;
+            width: 52px;
+            height: 52px;
+            background: var(--primary-gradient);
+            border-radius: var(--radius-md);
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 1.5rem;
-            margin-bottom: 1rem;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 12px rgba(0, 122, 255, 0.25);
         }
 
         .feature-card h3 {
             font-size: 1.125rem;
-            margin-bottom: 0.5rem;
+            font-weight: 600;
+            margin-bottom: 8px;
         }
 
         .feature-card p {
-            color: var(--text-secondary);
             font-size: 0.9rem;
+            color: var(--text-tertiary);
+            line-height: 1.6;
         }
 
-        /* 下载区域 */
+        /* ========== 下载区域 ========== */
         .download-section {
-            padding: 6rem 2rem;
-            background: linear-gradient(180deg, transparent 0%, rgba(30, 41, 59, 0.3) 100%);
+            padding: 80px 24px;
         }
 
         .download-container {
-            max-width: 900px;
+            max-width: 800px;
             margin: 0 auto;
         }
 
-        .download-tabs {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 1.5rem;
-            justify-content: center;
-        }
-
-        .tab-btn {
-            padding: 0.75rem 1.5rem;
-            background: transparent;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: var(--text-secondary);
-            cursor: pointer;
-            transition: all 0.2s;
-            font-size: 0.9rem;
-        }
-
-        .tab-btn.active {
-            background: var(--primary);
-            border-color: var(--primary);
-            color: white;
-        }
-
         .download-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 2rem;
+            padding: 32px;
+            border-radius: var(--radius-xl);
         }
 
         .release-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 1.5rem;
+            margin-bottom: 24px;
             flex-wrap: wrap;
-            gap: 1rem;
+            gap: 16px;
         }
 
         .release-info h3 {
             font-size: 1.5rem;
-            margin-bottom: 0.25rem;
+            font-weight: 600;
         }
 
         .release-info .meta {
-            color: var(--text-secondary);
-            font-size: 0.85rem;
+            color: var(--text-tertiary);
+            font-size: 0.9rem;
+            margin-top: 4px;
         }
 
         .release-tag {
-            padding: 0.5rem 1rem;
-            background: rgba(16, 185, 129, 0.2);
+            padding: 8px 16px;
+            background: rgba(52, 199, 89, 0.15);
             color: var(--success);
-            border-radius: 6px;
+            border-radius: var(--radius-sm);
             font-size: 0.85rem;
             font-weight: 500;
         }
 
         .download-list {
-            display: grid;
-            gap: 0.75rem;
-            margin-bottom: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 24px;
         }
 
         .download-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 1rem 1.25rem;
-            background: rgba(15, 23, 42, 0.5);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            transition: all 0.2s;
+            padding: 16px 20px;
+            background: var(--glass-tertiary);
+            border: 1px solid var(--glass-border-subtle);
+            border-radius: var(--radius-md);
+            transition: all 0.3s var(--ease-out);
         }
 
         .download-item:hover {
+            background: var(--glass-secondary);
+            transform: translateX(4px);
             border-color: var(--primary);
-            background: rgba(37, 99, 235, 0.1);
         }
 
         .download-item .info {
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: 14px;
         }
 
         .download-item .icon {
-            width: 40px;
-            height: 40px;
-            background: var(--bg-card);
-            border-radius: 8px;
+            width: 44px;
+            height: 44px;
+            background: var(--glass-secondary);
+            border-radius: var(--radius-sm);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -442,198 +607,134 @@
         }
 
         .download-item .size {
-            color: var(--text-secondary);
+            color: var(--text-tertiary);
             font-size: 0.85rem;
+            margin-top: 2px;
         }
 
-        .download-item .btn-download {
-            padding: 0.5rem 1rem;
+        .download-item .btn-dl {
+            padding: 10px 20px;
             background: var(--primary);
-            color: white;
+            color: #fff;
             border: none;
-            border-radius: 6px;
+            border-radius: var(--radius-sm);
+            font-size: 0.875rem;
+            font-weight: 500;
             cursor: pointer;
             text-decoration: none;
-            font-size: 0.85rem;
-            transition: background 0.2s;
+            transition: all 0.2s var(--ease-out);
         }
 
-        .download-item .btn-download:hover {
-            background: var(--primary-dark);
+        .download-item .btn-dl:hover {
+            background: #0066d6;
+            transform: scale(1.02);
         }
 
-        .changelog-toggle {
+        .changelog-btn {
             width: 100%;
-            padding: 1rem;
+            padding: 14px;
             background: transparent;
-            border: 1px solid var(--border);
-            border-radius: 8px;
+            border: 1px solid var(--glass-border-subtle);
+            border-radius: var(--radius-md);
             color: var(--text-secondary);
-            cursor: pointer;
             font-size: 0.9rem;
+            cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 0.5rem;
-            transition: all 0.2s;
+            gap: 8px;
+            transition: all 0.2s var(--ease-out);
         }
 
-        .changelog-toggle:hover {
+        .changelog-btn:hover {
+            background: var(--glass-tertiary);
             border-color: var(--primary);
-            color: var(--text-primary);
+            color: var(--primary);
         }
 
         .changelog-content {
-            margin-top: 1rem;
-            padding: 1.5rem;
-            background: rgba(15, 23, 42, 0.5);
-            border-radius: 8px;
+            margin-top: 16px;
+            padding: 20px;
+            background: var(--glass-tertiary);
+            border-radius: var(--radius-md);
             display: none;
-            max-height: 400px;
+            max-height: 300px;
             overflow-y: auto;
+            font-size: 0.9rem;
+            line-height: 1.8;
         }
 
         .changelog-content.show {
             display: block;
+            animation: fadeInUp 0.3s var(--ease-out);
         }
 
-        .changelog-content h4 {
-            margin-bottom: 0.5rem;
-            color: var(--secondary);
-        }
-
-        .changelog-content ul {
-            margin-left: 1.5rem;
-            color: var(--text-secondary);
-        }
-
-        .changelog-content li {
-            margin-bottom: 0.25rem;
-        }
-
-        /* 界面预览 */
-        .preview-section {
-            padding: 6rem 2rem;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        .preview-tabs {
-            display: flex;
-            gap: 0.5rem;
-            margin-bottom: 2rem;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        .preview-tab {
-            padding: 0.625rem 1.25rem;
-            background: transparent;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            color: var(--text-secondary);
-            cursor: pointer;
-            font-size: 0.85rem;
-            transition: all 0.2s;
-        }
-
-        .preview-tab.active {
-            background: var(--primary);
-            border-color: var(--primary);
-            color: white;
-        }
-
-        .preview-container {
-            position: relative;
-            border-radius: 16px;
-            overflow: hidden;
-            border: 1px solid var(--border);
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
-        }
-
-        .preview-container img {
-            width: 100%;
-            height: auto;
-            display: block;
-        }
-
-        .preview-container .placeholder {
-            aspect-ratio: 16/9;
-            background: var(--bg-card);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--text-secondary);
-        }
-
-        /* 快速开始 */
-        .quickstart {
-            padding: 6rem 2rem;
-            background: linear-gradient(180deg, rgba(30, 41, 59, 0.3) 0%, transparent 100%);
-        }
-
+        /* ========== 快速开始 ========== */
         .quickstart-container {
-            max-width: 800px;
+            max-width: 700px;
             margin: 0 auto;
         }
 
         .code-block {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
+            margin-bottom: 20px;
+            border-radius: var(--radius-lg);
             overflow: hidden;
-            margin-bottom: 1.5rem;
         }
 
         .code-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0.75rem 1rem;
-            background: rgba(15, 23, 42, 0.5);
-            border-bottom: 1px solid var(--border);
+            padding: 14px 20px;
+            background: var(--glass-tertiary);
+            border-bottom: 1px solid var(--glass-border-subtle);
         }
 
         .code-header span {
+            font-size: 0.9rem;
             color: var(--text-secondary);
-            font-size: 0.85rem;
+            font-weight: 500;
         }
 
         .copy-btn {
-            padding: 0.375rem 0.75rem;
+            padding: 6px 14px;
             background: transparent;
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            color: var(--text-secondary);
-            cursor: pointer;
+            border: 1px solid var(--glass-border-subtle);
+            border-radius: var(--radius-sm);
+            color: var(--text-tertiary);
             font-size: 0.8rem;
-            transition: all 0.2s;
+            cursor: pointer;
+            transition: all 0.2s var(--ease-out);
         }
 
         .copy-btn:hover {
+            background: var(--primary);
             border-color: var(--primary);
-            color: var(--primary);
+            color: #fff;
         }
 
         .code-content {
-            padding: 1rem 1.25rem;
-            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-            font-size: 0.9rem;
+            padding: 20px;
+            font-family: 'SF Mono', 'Monaco', 'Menlo', monospace;
+            font-size: 0.875rem;
+            line-height: 1.8;
             overflow-x: auto;
         }
 
         .code-content .comment {
-            color: var(--text-secondary);
+            color: var(--text-tertiary);
         }
 
-        .code-content .command {
+        .code-content .cmd {
             color: var(--success);
         }
 
-        /* 页脚 */
+        /* ========== 页脚 ========== */
         footer {
-            padding: 4rem 2rem 2rem;
-            border-top: 1px solid var(--border);
+            position: relative;
+            z-index: 1;
+            padding: 60px 24px 30px;
+            border-top: 1px solid var(--glass-border-subtle);
         }
 
         .footer-content {
@@ -641,23 +742,26 @@
             margin: 0 auto;
             display: grid;
             grid-template-columns: 2fr 1fr 1fr 1fr;
-            gap: 3rem;
+            gap: 48px;
         }
 
         .footer-brand h3 {
-            font-size: 1.25rem;
-            margin-bottom: 0.5rem;
+            font-size: 1.125rem;
+            margin-bottom: 12px;
         }
 
         .footer-brand p {
-            color: var(--text-secondary);
+            color: var(--text-tertiary);
             font-size: 0.9rem;
+            line-height: 1.6;
         }
 
         .footer-links h4 {
-            font-size: 0.9rem;
-            margin-bottom: 1rem;
-            color: var(--text-secondary);
+            font-size: 0.85rem;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 16px;
         }
 
         .footer-links ul {
@@ -665,7 +769,7 @@
         }
 
         .footer-links a {
-            color: var(--text-primary);
+            color: var(--text-secondary);
             text-decoration: none;
             font-size: 0.9rem;
             line-height: 2;
@@ -673,87 +777,96 @@
         }
 
         .footer-links a:hover {
-            color: var(--secondary);
+            color: var(--primary);
         }
 
         .footer-bottom {
             max-width: 1200px;
-            margin: 3rem auto 0;
-            padding-top: 2rem;
-            border-top: 1px solid var(--border);
+            margin: 40px auto 0;
+            padding-top: 24px;
+            border-top: 1px solid var(--glass-border-subtle);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            color: var(--text-secondary);
+            color: var(--text-tertiary);
             font-size: 0.85rem;
         }
 
         .footer-bottom a {
-            color: var(--text-secondary);
+            color: var(--text-tertiary);
             text-decoration: none;
         }
 
         .footer-bottom a:hover {
-            color: var(--text-primary);
+            color: var(--primary);
         }
 
-        /* 加载动画 */
+        /* ========== 加载状态 ========== */
         .loading {
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 2rem;
-            color: var(--text-secondary);
+            padding: 40px;
+            color: var(--text-tertiary);
+            gap: 12px;
         }
 
         .spinner {
-            width: 24px;
-            height: 24px;
-            border: 2px solid var(--border);
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--glass-border);
             border-top-color: var(--primary);
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin-right: 0.75rem;
         }
 
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
 
-        /* 响应式 */
+        /* ========== 响应式 ========== */
         @media (max-width: 768px) {
             nav {
-                padding: 1rem;
+                padding: 10px 16px;
             }
 
-            .nav-links {
+            .logo-text {
+                display: none;
+            }
+
+            .github-btn span {
                 display: none;
             }
 
             .stats {
                 flex-direction: column;
-                gap: 1.5rem;
+                gap: 16px;
+            }
+
+            .stat-item {
+                padding: 0;
+                border-right: none !important;
+            }
+
+            .stat-item:not(:last-child) {
+                padding-bottom: 16px;
+                border-bottom: 1px solid var(--glass-border-subtle);
             }
 
             .footer-content {
                 grid-template-columns: 1fr;
-                gap: 2rem;
+                gap: 32px;
             }
 
             .footer-bottom {
                 flex-direction: column;
-                gap: 1rem;
+                gap: 12px;
                 text-align: center;
-            }
-
-            .release-header {
-                flex-direction: column;
-                align-items: flex-start;
             }
 
             .download-item {
                 flex-direction: column;
-                gap: 1rem;
+                gap: 16px;
                 text-align: center;
             }
 
@@ -762,125 +875,134 @@
             }
         }
 
-        /* 滚动条样式 */
+        /* ========== 滚动条 ========== */
         ::-webkit-scrollbar {
             width: 8px;
             height: 8px;
         }
 
         ::-webkit-scrollbar-track {
-            background: var(--bg-dark);
+            background: transparent;
         }
 
         ::-webkit-scrollbar-thumb {
-            background: var(--border);
+            background: var(--text-tertiary);
             border-radius: 4px;
         }
 
         ::-webkit-scrollbar-thumb:hover {
             background: var(--text-secondary);
         }
+
+        /* 减少动效支持 */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="bg-gradient"></div>
+    <!-- 背景光晕 -->
+    <div class="glow-container">
+        <div class="glow-blob glow-blue"></div>
+        <div class="glow-blob glow-purple"></div>
+    </div>
 
     <!-- 导航栏 -->
-    <nav>
+    <nav class="glass-primary">
         <a href="#" class="logo">
             <div class="logo-icon">📧</div>
-            <span>晴辰云邮</span>
+            <span class="logo-text" data-i18n="brand">晴辰云邮</span>
         </a>
-        <ul class="nav-links">
-            <li><a href="#features">功能特性</a></li>
-            <li><a href="#download">下载安装</a></li>
-            <li><a href="#preview">界面预览</a></li>
-            <li><a href="#quickstart">快速开始</a></li>
-        </ul>
-        <a href="https://github.com/1186258278/QingChenMail" target="_blank" class="nav-btn">
-            ⭐ GitHub
-        </a>
+        <div class="nav-actions">
+            <button class="nav-btn" id="lang-toggle" title="切换语言" aria-label="Switch Language">
+                🌐
+            </button>
+            <button class="nav-btn" id="theme-toggle" title="切换主题" aria-label="Toggle Theme">
+                🌙
+            </button>
+            <a href="https://github.com/1186258278/QingChenMail" target="_blank" class="nav-btn github-btn">
+                ⭐ <span data-i18n="github">GitHub</span>
+            </a>
+        </div>
     </nav>
 
-    <!-- Hero 区域 -->
+    <!-- Hero -->
     <section class="hero">
-        <a href="https://github.com/1186258278/QingChenMail/releases/latest" target="_blank" class="version-badge">
-            <span class="dot"></span>
-            <span id="latest-version">正在获取最新版本...</span>
+        <a href="https://github.com/1186258278/QingChenMail/releases/latest" target="_blank" class="version-badge glass-secondary">
+            <span class="badge-dot"></span>
+            <span id="latest-version" data-i18n="loading">加载中...</span>
         </a>
         
-        <h1>
-            晴辰云邮
-            <span>企业级自建邮件系统</span>
-        </h1>
+        <h1 data-i18n="hero.title">晴辰云邮</h1>
+        <p class="hero-subtitle" data-i18n="hero.subtitle">QingChen Mail</p>
+        <p class="hero-desc" data-i18n="hero.desc">企业级自建邮件系统<br>发送 · 接收 · 营销 · 一站式解决方案</p>
         
-        <p class="hero-desc">
-            发送/接收/营销一站式解决方案<br>
-            一次部署，永久免费，数据 100% 自主掌控
-        </p>
-        
-        <div class="hero-buttons">
+        <div class="btn-group">
             <a href="#download" class="btn btn-primary">
-                📥 立即下载
+                📥 <span data-i18n="btn.download">立即下载</span>
             </a>
             <a href="https://github.com/1186258278/QingChenMail" target="_blank" class="btn btn-secondary">
-                📖 查看源码
+                📖 <span data-i18n="btn.source">查看源码</span>
             </a>
         </div>
 
-        <div class="stats">
+        <div class="stats glass-secondary">
             <div class="stat-item">
                 <div class="stat-value" id="stars-count">--</div>
                 <div class="stat-label">GitHub Stars</div>
             </div>
             <div class="stat-item">
                 <div class="stat-value" id="downloads-count">--</div>
-                <div class="stat-label">总下载量</div>
+                <div class="stat-label" data-i18n="stats.downloads">总下载</div>
             </div>
             <div class="stat-item">
                 <div class="stat-value" id="releases-count">--</div>
-                <div class="stat-label">版本发布</div>
+                <div class="stat-label" data-i18n="stats.releases">版本</div>
             </div>
         </div>
     </section>
 
     <!-- 功能特性 -->
-    <section class="features" id="features">
-        <div class="section-title">
-            <h2>🚀 核心能力</h2>
-            <p>专为企业打造的邮件基础设施</p>
+    <section class="section" id="features">
+        <div class="section-header">
+            <h2 data-i18n="features.title">🚀 核心能力</h2>
+            <p data-i18n="features.subtitle">专为企业打造的邮件基础设施</p>
         </div>
 
         <div class="features-grid">
-            <div class="feature-card">
+            <div class="feature-card glass-secondary">
                 <div class="feature-icon">📤</div>
-                <h3>智能发信引擎</h3>
-                <p>直连发送 + SMTP 中继双模式，自动 DKIM 签名，高送达率保障</p>
+                <h3 data-i18n="features.send.title">智能发信引擎</h3>
+                <p data-i18n="features.send.desc">直连发送 + SMTP 中继双模式，自动 DKIM 签名，高送达率保障</p>
             </div>
-            <div class="feature-card">
+            <div class="feature-card glass-secondary">
                 <div class="feature-icon">📥</div>
-                <h3>邮件网关</h3>
-                <p>内置 SMTP Server，STARTTLS 加密，智能转发，MIME 解析</p>
+                <h3 data-i18n="features.receive.title">邮件网关</h3>
+                <p data-i18n="features.receive.desc">内置 SMTP Server，STARTTLS 加密，智能转发，MIME 解析</p>
             </div>
-            <div class="feature-card">
+            <div class="feature-card glass-secondary">
                 <div class="feature-icon">📊</div>
-                <h3>营销任务</h3>
-                <p>批量发送、暂停恢复、实时进度、打开率/点击率统计</p>
+                <h3 data-i18n="features.campaign.title">营销任务</h3>
+                <p data-i18n="features.campaign.desc">批量发送、暂停恢复、实时进度、打开率/点击率统计</p>
             </div>
-            <div class="feature-card">
+            <div class="feature-card glass-secondary">
                 <div class="feature-icon">🔐</div>
-                <h3>安全防护</h3>
-                <p>两步验证 (2FA)、速率限制、IP 黑名单、JWT 认证</p>
+                <h3 data-i18n="features.security.title">安全防护</h3>
+                <p data-i18n="features.security.desc">两步验证 (2FA)、速率限制、IP 黑名单、JWT 认证</p>
             </div>
-            <div class="feature-card">
+            <div class="feature-card glass-secondary">
                 <div class="feature-icon">📜</div>
-                <h3>证书管理</h3>
-                <p>Let's Encrypt 自动申请/续期，支持手动上传 SSL 证书</p>
+                <h3 data-i18n="features.cert.title">证书管理</h3>
+                <p data-i18n="features.cert.desc">Let's Encrypt 自动申请/续期，支持手动上传 SSL 证书</p>
             </div>
-            <div class="feature-card">
+            <div class="feature-card glass-secondary">
                 <div class="feature-icon">🔧</div>
-                <h3>开发者友好</h3>
-                <p>RESTful API、永久密钥、模板引擎、Webhook 回调</p>
+                <h3 data-i18n="features.api.title">开发者友好</h3>
+                <p data-i18n="features.api.desc">RESTful API、永久密钥、模板引擎、Webhook 回调</p>
             </div>
         </div>
     </section>
@@ -888,107 +1010,80 @@
     <!-- 下载区域 -->
     <section class="download-section" id="download">
         <div class="download-container">
-            <div class="section-title">
-                <h2>📥 下载安装</h2>
-                <p>选择适合您系统的版本</p>
+            <div class="section-header">
+                <h2 data-i18n="download.title">📥 下载安装</h2>
+                <p data-i18n="download.subtitle">选择适合您系统的版本</p>
             </div>
 
-            <div class="download-tabs">
-                <button class="tab-btn active" data-source="github">GitHub</button>
-                <button class="tab-btn" data-source="gitee">Gitee 镜像</button>
-            </div>
-
-            <div class="download-card">
+            <div class="download-card glass-secondary">
                 <div class="release-header">
                     <div class="release-info">
-                        <h3 id="release-version">加载中...</h3>
+                        <h3 id="release-version" data-i18n="loading">加载中...</h3>
                         <div class="meta" id="release-date">--</div>
                     </div>
-                    <span class="release-tag">最新稳定版</span>
+                    <span class="release-tag" data-i18n="download.latest">最新稳定版</span>
                 </div>
 
                 <div class="download-list" id="download-list">
                     <div class="loading">
                         <div class="spinner"></div>
-                        正在获取下载列表...
+                        <span data-i18n="download.fetching">正在获取下载列表...</span>
                     </div>
                 </div>
 
-                <button class="changelog-toggle" onclick="toggleChangelog()">
-                    📋 查看更新日志
+                <button class="changelog-btn" onclick="toggleChangelog()">
+                    📋 <span data-i18n="download.changelog">查看更新日志</span>
                     <span id="changelog-arrow">▼</span>
                 </button>
 
                 <div class="changelog-content" id="changelog">
-                    <div id="changelog-body">加载中...</div>
+                    <div id="changelog-body" data-i18n="loading">加载中...</div>
                 </div>
             </div>
-        </div>
-    </section>
-
-    <!-- 界面预览 -->
-    <section class="preview-section" id="preview">
-        <div class="section-title">
-            <h2>🖼️ 界面预览</h2>
-            <p>现代化 Web 管理后台</p>
-        </div>
-
-        <div class="preview-tabs">
-            <button class="preview-tab active" data-img="image/zh/01.png">登录页面</button>
-            <button class="preview-tab" data-img="image/zh/02.png">仪表盘</button>
-            <button class="preview-tab" data-img="image/zh/04.png">发送邮件</button>
-            <button class="preview-tab" data-img="image/zh/06.png">营销任务</button>
-            <button class="preview-tab" data-img="image/zh/07.png">收件箱</button>
-            <button class="preview-tab" data-img="image/zh/10.png">系统设置</button>
-        </div>
-
-        <div class="preview-container">
-            <img id="preview-img" src="image/zh/01.png" alt="界面预览">
         </div>
     </section>
 
     <!-- 快速开始 -->
-    <section class="quickstart" id="quickstart">
+    <section class="section" id="quickstart">
         <div class="quickstart-container">
-            <div class="section-title">
-                <h2>⚡ 快速开始</h2>
-                <p>三步完成部署</p>
+            <div class="section-header">
+                <h2 data-i18n="quickstart.title">⚡ 快速开始</h2>
+                <p data-i18n="quickstart.subtitle">三步完成部署</p>
             </div>
 
-            <div class="code-block">
+            <div class="code-block glass-secondary">
                 <div class="code-header">
-                    <span>1. 下载并解压</span>
-                    <button class="copy-btn" onclick="copyCode(this, 'wget https://github.com/1186258278/QingChenMail/releases/latest/download/goemail-linux-amd64.tar.gz\ntar -xzf goemail-linux-amd64.tar.gz')">复制</button>
+                    <span data-i18n="quickstart.step1">1. 下载并解压</span>
+                    <button class="copy-btn" onclick="copyCode(this, 'wget https://github.com/1186258278/QingChenMail/releases/latest/download/goemail-linux-amd64.tar.gz\ntar -xzf goemail-linux-amd64.tar.gz')" data-i18n="btn.copy">复制</button>
                 </div>
                 <div class="code-content">
                     <span class="comment"># Linux (amd64)</span><br>
-                    <span class="command">wget</span> https://github.com/1186258278/QingChenMail/releases/latest/download/goemail-linux-amd64.tar.gz<br>
-                    <span class="command">tar</span> -xzf goemail-linux-amd64.tar.gz
+                    <span class="cmd">wget</span> https://github.com/.../goemail-linux-amd64.tar.gz<br>
+                    <span class="cmd">tar</span> -xzf goemail-linux-amd64.tar.gz
                 </div>
             </div>
 
-            <div class="code-block">
+            <div class="code-block glass-secondary">
                 <div class="code-header">
-                    <span>2. 配置 (可选)</span>
-                    <button class="copy-btn" onclick="copyCode(this, 'cp config.example.json config.json\nvim config.json')">复制</button>
+                    <span data-i18n="quickstart.step2">2. 配置 (可选)</span>
+                    <button class="copy-btn" onclick="copyCode(this, 'cp config.example.json config.json\nvim config.json')" data-i18n="btn.copy">复制</button>
                 </div>
                 <div class="code-content">
-                    <span class="comment"># 复制示例配置并修改</span><br>
-                    <span class="command">cp</span> config.example.json config.json<br>
-                    <span class="command">vim</span> config.json
+                    <span class="comment"># <span data-i18n="quickstart.config_hint">复制示例配置并修改</span></span><br>
+                    <span class="cmd">cp</span> config.example.json config.json<br>
+                    <span class="cmd">vim</span> config.json
                 </div>
             </div>
 
-            <div class="code-block">
+            <div class="code-block glass-secondary">
                 <div class="code-header">
-                    <span>3. 启动服务</span>
-                    <button class="copy-btn" onclick="copyCode(this, './goemail')">复制</button>
+                    <span data-i18n="quickstart.step3">3. 启动服务</span>
+                    <button class="copy-btn" onclick="copyCode(this, './goemail')" data-i18n="btn.copy">复制</button>
                 </div>
                 <div class="code-content">
-                    <span class="comment"># 直接运行</span><br>
-                    <span class="command">./goemail</span><br><br>
-                    <span class="comment"># 默认账号: admin / 123456</span><br>
-                    <span class="comment"># 访问 http://localhost:8080</span>
+                    <span class="cmd">./goemail</span><br><br>
+                    <span class="comment"># <span data-i18n="quickstart.default_account">默认账号: admin / 123456</span></span><br>
+                    <span class="comment"># <span data-i18n="quickstart.visit">访问</span> http://localhost:8080</span>
                 </div>
             </div>
         </div>
@@ -998,161 +1093,272 @@
     <footer>
         <div class="footer-content">
             <div class="footer-brand">
-                <h3>📧 晴辰云邮</h3>
-                <p>企业级自建邮件系统<br>发送/接收/营销一站式解决方案</p>
+                <h3>📧 <span data-i18n="brand">晴辰云邮</span></h3>
+                <p data-i18n="footer.desc">企业级自建邮件系统<br>发送/接收/营销一站式解决方案</p>
             </div>
             <div class="footer-links">
-                <h4>资源</h4>
+                <h4 data-i18n="footer.resources">资源</h4>
                 <ul>
-                    <li><a href="https://github.com/1186258278/QingChenMail" target="_blank">GitHub 仓库</a></li>
-                    <li><a href="https://github.com/1186258278/QingChenMail/releases" target="_blank">版本发布</a></li>
-                    <li><a href="INSTALL_zh-CN.md" target="_blank">部署指南</a></li>
+                    <li><a href="https://github.com/1186258278/QingChenMail" target="_blank" data-i18n="footer.github">GitHub 仓库</a></li>
+                    <li><a href="https://github.com/1186258278/QingChenMail/releases" target="_blank" data-i18n="footer.releases">版本发布</a></li>
+                    <li><a href="INSTALL_zh-CN.md" target="_blank" data-i18n="footer.guide">部署指南</a></li>
                 </ul>
             </div>
             <div class="footer-links">
-                <h4>社区</h4>
+                <h4 data-i18n="footer.community">社区</h4>
                 <ul>
-                    <li><a href="https://github.com/1186258278/QingChenMail/issues" target="_blank">问题反馈</a></li>
-                    <li><a href="https://github.com/1186258278/QingChenMail/discussions" target="_blank">讨论区</a></li>
-                    <li><a href="https://github.com/1186258278/QingChenMail/blob/main/CONTRIBUTING.md" target="_blank">贡献指南</a></li>
+                    <li><a href="https://github.com/1186258278/QingChenMail/issues" target="_blank" data-i18n="footer.issues">问题反馈</a></li>
+                    <li><a href="https://github.com/1186258278/QingChenMail/discussions" target="_blank" data-i18n="footer.discussions">讨论区</a></li>
                 </ul>
             </div>
             <div class="footer-links">
-                <h4>关于</h4>
+                <h4 data-i18n="footer.about">关于</h4>
                 <ul>
-                    <li><a href="https://qingchencloud.com" target="_blank">晴辰云</a></li>
-                    <li><a href="https://github.com/1186258278/QingChenMail/blob/main/LICENSE" target="_blank">开源许可 (MIT)</a></li>
+                    <li><a href="https://qingchencloud.com" target="_blank" data-i18n="footer.official">晴辰云</a></li>
+                    <li><a href="https://github.com/1186258278/QingChenMail/blob/main/LICENSE" target="_blank">MIT License</a></li>
                 </ul>
             </div>
         </div>
         <div class="footer-bottom">
-            <span>© 2024-2026 晴辰云邮. 基于 MIT 许可证开源</span>
-            <span>
-                Made with ❤️ by 
-                <a href="https://github.com/1186258278" target="_blank">@1186258278</a>
-            </span>
+            <span>© 2024-2026 <span data-i18n="brand">晴辰云邮</span>. MIT License</span>
+            <span>Made with ❤️ by <a href="https://github.com/1186258278" target="_blank">@1186258278</a></span>
         </div>
     </footer>
 
     <script>
-        // GitHub API 配置
-        const GITHUB_REPO = '1186258278/QingChenMail';
-        const GITHUB_API = `https://api.github.com/repos/${GITHUB_REPO}`;
-        const GITEE_REPO = ''; // 如有 Gitee 镜像可配置
-
-        // 平台图标映射
-        const platformIcons = {
-            'windows': '🪟',
-            'linux': '🐧',
-            'darwin': '🍎',
-            'amd64': '💻',
-            'arm64': '📱',
+        // ========== i18n 国际化 ==========
+        const i18n = {
+            'zh-CN': {
+                brand: '晴辰云邮',
+                github: 'GitHub',
+                loading: '加载中...',
+                'hero.title': '晴辰云邮',
+                'hero.subtitle': 'QingChen Mail',
+                'hero.desc': '企业级自建邮件系统<br>发送 · 接收 · 营销 · 一站式解决方案',
+                'btn.download': '立即下载',
+                'btn.source': '查看源码',
+                'btn.copy': '复制',
+                'stats.downloads': '总下载',
+                'stats.releases': '版本',
+                'features.title': '🚀 核心能力',
+                'features.subtitle': '专为企业打造的邮件基础设施',
+                'features.send.title': '智能发信引擎',
+                'features.send.desc': '直连发送 + SMTP 中继双模式，自动 DKIM 签名，高送达率保障',
+                'features.receive.title': '邮件网关',
+                'features.receive.desc': '内置 SMTP Server，STARTTLS 加密，智能转发，MIME 解析',
+                'features.campaign.title': '营销任务',
+                'features.campaign.desc': '批量发送、暂停恢复、实时进度、打开率/点击率统计',
+                'features.security.title': '安全防护',
+                'features.security.desc': '两步验证 (2FA)、速率限制、IP 黑名单、JWT 认证',
+                'features.cert.title': '证书管理',
+                'features.cert.desc': 'Let\'s Encrypt 自动申请/续期，支持手动上传 SSL 证书',
+                'features.api.title': '开发者友好',
+                'features.api.desc': 'RESTful API、永久密钥、模板引擎、Webhook 回调',
+                'download.title': '📥 下载安装',
+                'download.subtitle': '选择适合您系统的版本',
+                'download.latest': '最新稳定版',
+                'download.fetching': '正在获取下载列表...',
+                'download.changelog': '查看更新日志',
+                'quickstart.title': '⚡ 快速开始',
+                'quickstart.subtitle': '三步完成部署',
+                'quickstart.step1': '1. 下载并解压',
+                'quickstart.step2': '2. 配置 (可选)',
+                'quickstart.step3': '3. 启动服务',
+                'quickstart.config_hint': '复制示例配置并修改',
+                'quickstart.default_account': '默认账号: admin / 123456',
+                'quickstart.visit': '访问',
+                'footer.desc': '企业级自建邮件系统<br>发送/接收/营销一站式解决方案',
+                'footer.resources': '资源',
+                'footer.github': 'GitHub 仓库',
+                'footer.releases': '版本发布',
+                'footer.guide': '部署指南',
+                'footer.community': '社区',
+                'footer.issues': '问题反馈',
+                'footer.discussions': '讨论区',
+                'footer.about': '关于',
+                'footer.official': '晴辰云',
+                'version.released': '已发布',
+                'release.date': '发布于',
+            },
+            'en': {
+                brand: 'QingChen Mail',
+                github: 'GitHub',
+                loading: 'Loading...',
+                'hero.title': 'QingChen Mail',
+                'hero.subtitle': '晴辰云邮',
+                'hero.desc': 'Enterprise Self-hosted Email System<br>Send · Receive · Marketing · All-in-One',
+                'btn.download': 'Download',
+                'btn.source': 'Source Code',
+                'btn.copy': 'Copy',
+                'stats.downloads': 'Downloads',
+                'stats.releases': 'Releases',
+                'features.title': '🚀 Core Features',
+                'features.subtitle': 'Email infrastructure built for enterprises',
+                'features.send.title': 'Smart Sending Engine',
+                'features.send.desc': 'Direct + SMTP relay dual mode, auto DKIM signing, high delivery rate',
+                'features.receive.title': 'Mail Gateway',
+                'features.receive.desc': 'Built-in SMTP Server, STARTTLS encryption, smart forwarding, MIME parsing',
+                'features.campaign.title': 'Marketing Campaigns',
+                'features.campaign.desc': 'Batch sending, pause/resume, real-time progress, open/click tracking',
+                'features.security.title': 'Security',
+                'features.security.desc': '2FA (TOTP), rate limiting, IP blacklist, JWT authentication',
+                'features.cert.title': 'Certificate Management',
+                'features.cert.desc': 'Let\'s Encrypt auto-renewal, manual SSL certificate upload',
+                'features.api.title': 'Developer Friendly',
+                'features.api.desc': 'RESTful API, permanent keys, template engine, webhooks',
+                'download.title': '📥 Download',
+                'download.subtitle': 'Choose the version for your system',
+                'download.latest': 'Latest Stable',
+                'download.fetching': 'Fetching download list...',
+                'download.changelog': 'View Changelog',
+                'quickstart.title': '⚡ Quick Start',
+                'quickstart.subtitle': 'Deploy in 3 steps',
+                'quickstart.step1': '1. Download & Extract',
+                'quickstart.step2': '2. Configure (Optional)',
+                'quickstart.step3': '3. Start Service',
+                'quickstart.config_hint': 'Copy and edit config',
+                'quickstart.default_account': 'Default: admin / 123456',
+                'quickstart.visit': 'Visit',
+                'footer.desc': 'Enterprise Self-hosted Email System<br>Send/Receive/Marketing All-in-One',
+                'footer.resources': 'Resources',
+                'footer.github': 'GitHub Repo',
+                'footer.releases': 'Releases',
+                'footer.guide': 'Deploy Guide',
+                'footer.community': 'Community',
+                'footer.issues': 'Issues',
+                'footer.discussions': 'Discussions',
+                'footer.about': 'About',
+                'footer.official': 'QingChen Cloud',
+                'version.released': 'Released',
+                'release.date': 'Released on',
+            }
         };
 
-        // 格式化文件大小
+        let currentLang = localStorage.getItem('lang') || 'zh-CN';
+
+        function setLanguage(lang) {
+            currentLang = lang;
+            localStorage.setItem('lang', lang);
+            document.documentElement.lang = lang === 'zh-CN' ? 'zh-CN' : 'en';
+            
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (i18n[lang] && i18n[lang][key]) {
+                    el.innerHTML = i18n[lang][key];
+                }
+            });
+        }
+
+        // ========== 主题切换 ==========
+        function toggleTheme() {
+            const html = document.documentElement;
+            const current = html.getAttribute('data-theme');
+            const next = current === 'dark' ? 'light' : 'dark';
+            
+            // 设置扩散起点
+            const toDark = next === 'dark';
+            html.style.setProperty('--reveal-x', toDark ? '100%' : '0%');
+            html.style.setProperty('--reveal-y', toDark ? '0%' : '100%');
+            
+            const switchTheme = () => {
+                html.setAttribute('data-theme', next);
+                localStorage.setItem('theme', next);
+                updateThemeIcon();
+            };
+            
+            if (document.startViewTransition) {
+                document.startViewTransition(switchTheme);
+            } else {
+                switchTheme();
+            }
+        }
+
+        function updateThemeIcon() {
+            const theme = document.documentElement.getAttribute('data-theme');
+            document.getElementById('theme-toggle').textContent = theme === 'dark' ? '☀️' : '🌙';
+        }
+
+        // ========== GitHub API ==========
+        const GITHUB_REPO = '1186258278/QingChenMail';
+        const GITHUB_API = `https://api.github.com/repos/${GITHUB_REPO}`;
+
         function formatSize(bytes) {
             if (bytes < 1024) return bytes + ' B';
             if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
             return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
         }
 
-        // 格式化日期
         function formatDate(dateStr) {
             const date = new Date(dateStr);
-            return date.toLocaleDateString('zh-CN', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-            });
+            const lang = currentLang === 'zh-CN' ? 'zh-CN' : 'en-US';
+            return date.toLocaleDateString(lang, { year: 'numeric', month: 'long', day: 'numeric' });
         }
 
-        // 获取平台图标
         function getPlatformIcon(filename) {
             const lower = filename.toLowerCase();
-            if (lower.includes('windows') || lower.includes('.exe')) return platformIcons.windows;
-            if (lower.includes('darwin') || lower.includes('macos')) return platformIcons.darwin;
-            if (lower.includes('linux')) return platformIcons.linux;
+            if (lower.includes('windows') || lower.includes('.exe')) return '🪟';
+            if (lower.includes('darwin') || lower.includes('macos')) return '🍎';
+            if (lower.includes('linux')) return '🐧';
             return '📦';
         }
 
-        // 获取平台名称
         function getPlatformName(filename) {
             const lower = filename.toLowerCase();
-            let os = 'Unknown';
-            let arch = '';
-            
+            let os = 'Unknown', arch = '';
             if (lower.includes('windows')) os = 'Windows';
             else if (lower.includes('darwin') || lower.includes('macos')) os = 'macOS';
             else if (lower.includes('linux')) os = 'Linux';
-            
             if (lower.includes('amd64') || lower.includes('x86_64')) arch = 'x64';
             else if (lower.includes('arm64') || lower.includes('aarch64')) arch = 'ARM64';
-            else if (lower.includes('386') || lower.includes('i386')) arch = 'x86';
-            
             return arch ? `${os} (${arch})` : os;
         }
 
-        // 获取仓库信息
         async function fetchRepoInfo() {
             try {
                 const res = await fetch(GITHUB_API);
                 const data = await res.json();
-                
                 document.getElementById('stars-count').textContent = data.stargazers_count || 0;
-            } catch (e) {
-                console.error('Failed to fetch repo info:', e);
-            }
+            } catch (e) { console.error(e); }
         }
 
-        // 获取发布信息
         async function fetchReleases() {
             try {
                 const res = await fetch(`${GITHUB_API}/releases`);
                 const releases = await res.json();
                 
                 if (!releases.length) {
-                    document.getElementById('download-list').innerHTML = '<div class="loading">暂无发布版本</div>';
+                    document.getElementById('download-list').innerHTML = `<div class="loading">${i18n[currentLang]['loading']}</div>`;
                     return;
                 }
                 
-                // 更新统计
                 document.getElementById('releases-count').textContent = releases.length;
                 
-                // 计算总下载量
                 let totalDownloads = 0;
-                releases.forEach(release => {
-                    release.assets.forEach(asset => {
-                        totalDownloads += asset.download_count;
-                    });
-                });
+                releases.forEach(r => r.assets.forEach(a => totalDownloads += a.download_count));
                 document.getElementById('downloads-count').textContent = totalDownloads;
                 
-                // 显示最新版本
                 const latest = releases[0];
                 displayRelease(latest);
                 
-                // 更新顶部版本标签
-                document.getElementById('latest-version').textContent = 
-                    `${latest.tag_name} 已发布 · ${formatDate(latest.published_at)}`;
+                const versionText = currentLang === 'zh-CN' 
+                    ? `${latest.tag_name} 已发布 · ${formatDate(latest.published_at)}`
+                    : `${latest.tag_name} Released · ${formatDate(latest.published_at)}`;
+                document.getElementById('latest-version').textContent = versionText;
                     
             } catch (e) {
-                console.error('Failed to fetch releases:', e);
-                document.getElementById('download-list').innerHTML = 
-                    '<div class="loading">获取发布信息失败，请直接访问 GitHub</div>';
+                console.error(e);
+                document.getElementById('download-list').innerHTML = '<div class="loading">Failed to fetch</div>';
             }
         }
 
-        // 显示发布信息
         function displayRelease(release) {
             document.getElementById('release-version').textContent = release.tag_name;
-            document.getElementById('release-date').textContent = 
-                `发布于 ${formatDate(release.published_at)}`;
+            const datePrefix = currentLang === 'zh-CN' ? '发布于 ' : 'Released on ';
+            document.getElementById('release-date').textContent = datePrefix + formatDate(release.published_at);
             
-            // 过滤并排序资源
             const assets = release.assets
                 .filter(a => !a.name.endsWith('.txt') && !a.name.includes('checksums'))
                 .sort((a, b) => {
-                    // Windows 优先
                     const aWin = a.name.toLowerCase().includes('windows');
                     const bWin = b.name.toLowerCase().includes('windows');
                     if (aWin && !bWin) return -1;
@@ -1161,8 +1367,7 @@
                 });
             
             if (!assets.length) {
-                document.getElementById('download-list').innerHTML = 
-                    '<div class="loading">该版本暂无可下载文件</div>';
+                document.getElementById('download-list').innerHTML = '<div class="loading">No files available</div>';
                 return;
             }
             
@@ -1177,21 +1382,17 @@
                                 <div class="size">${asset.name} · ${formatSize(asset.size)}</div>
                             </div>
                         </div>
-                        <a href="${asset.browser_download_url}" class="btn-download" download>
-                            下载
-                        </a>
+                        <a href="${asset.browser_download_url}" class="btn-dl" download>${currentLang === 'zh-CN' ? '下载' : 'Download'}</a>
                     </div>
                 `;
             });
             
             document.getElementById('download-list').innerHTML = html;
-            
-            // 更新日志
-            document.getElementById('changelog-body').innerHTML = 
-                release.body ? marked.parse(release.body) : '暂无更新日志';
+            document.getElementById('changelog-body').innerHTML = release.body 
+                ? marked.parse(release.body) 
+                : (currentLang === 'zh-CN' ? '暂无更新日志' : 'No changelog');
         }
 
-        // 切换更新日志
         function toggleChangelog() {
             const content = document.getElementById('changelog');
             const arrow = document.getElementById('changelog-arrow');
@@ -1199,48 +1400,25 @@
             arrow.textContent = content.classList.contains('show') ? '▲' : '▼';
         }
 
-        // 复制代码
         function copyCode(btn, code) {
             navigator.clipboard.writeText(code).then(() => {
-                const originalText = btn.textContent;
-                btn.textContent = '已复制!';
-                setTimeout(() => btn.textContent = originalText, 2000);
+                const original = btn.textContent;
+                btn.textContent = currentLang === 'zh-CN' ? '已复制!' : 'Copied!';
+                setTimeout(() => btn.textContent = original, 2000);
             });
         }
 
-        // 预览图片切换
-        document.querySelectorAll('.preview-tab').forEach(tab => {
-            tab.addEventListener('click', function() {
-                document.querySelectorAll('.preview-tab').forEach(t => t.classList.remove('active'));
-                this.classList.add('active');
-                document.getElementById('preview-img').src = this.dataset.img;
-            });
-        });
-
-        // 下载源切换
-        document.querySelectorAll('.download-tabs .tab-btn').forEach(tab => {
-            tab.addEventListener('click', function() {
-                document.querySelectorAll('.download-tabs .tab-btn').forEach(t => t.classList.remove('active'));
-                this.classList.add('active');
-                // 可以在这里切换 Gitee 源
-            });
-        });
-
-        // 简单的 Markdown 解析器
+        // 简单 Markdown 解析
         const marked = {
-            parse: function(text) {
-                if (!text) return '';
-                return text
-                    .replace(/^### (.*$)/gim, '<h4>$1</h4>')
-                    .replace(/^## (.*$)/gim, '<h4>$1</h4>')
-                    .replace(/^# (.*$)/gim, '<h4>$1</h4>')
-                    .replace(/^\* (.*$)/gim, '<li>$1</li>')
-                    .replace(/^- (.*$)/gim, '<li>$1</li>')
-                    .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
-                    .replace(/\*(.*)\*/gim, '<em>$1</em>')
-                    .replace(/`([^`]+)`/gim, '<code>$1</code>')
-                    .replace(/\n/gim, '<br>');
-            }
+            parse: (text) => text
+                .replace(/^### (.*$)/gim, '<h4>$1</h4>')
+                .replace(/^## (.*$)/gim, '<h4>$1</h4>')
+                .replace(/^# (.*$)/gim, '<h4>$1</h4>')
+                .replace(/^\* (.*$)/gim, '<li>$1</li>')
+                .replace(/^- (.*$)/gim, '<li>$1</li>')
+                .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
+                .replace(/`([^`]+)`/gim, '<code>$1</code>')
+                .replace(/\n/gim, '<br>')
         };
 
         // 平滑滚动
@@ -1248,13 +1426,19 @@
             anchor.addEventListener('click', function(e) {
                 e.preventDefault();
                 const target = document.querySelector(this.getAttribute('href'));
-                if (target) {
-                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
+                if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
             });
         });
 
         // 初始化
+        document.getElementById('theme-toggle').addEventListener('click', toggleTheme);
+        document.getElementById('lang-toggle').addEventListener('click', () => {
+            setLanguage(currentLang === 'zh-CN' ? 'en' : 'zh-CN');
+            fetchReleases(); // 刷新日期格式
+        });
+
+        updateThemeIcon();
+        setLanguage(currentLang);
         fetchRepoInfo();
         fetchReleases();
     </script>
