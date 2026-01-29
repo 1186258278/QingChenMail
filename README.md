@@ -65,11 +65,13 @@
 
 ### 🛡️ 安全防护
 
+- **两步验证 (2FA)**: TOTP 动态口令，Google/Microsoft Authenticator 兼容
 - **速率限制**: IP 级连接限制，防 DDoS/暴力攻击
 - **IP 黑名单**: 一键封禁恶意 IP
 - **JWT 认证**: 安全 Token + API Key 双重验证
 - **密码加密**: bcrypt 哈希存储
 - **HTTPS 支持**: 全站 SSL 加密
+- **证书管理**: Let's Encrypt 自动申请/续期，支持手动上传
 
 </td>
 <td>
@@ -144,7 +146,17 @@ goemail.exe
 | 默认账号 | `admin` |
 | 默认密码 | `123456` |
 
-> ⚠️ **首次登录后请立即修改密码！**
+> ⚠️ **首次登录后请立即修改密码，并建议开启两步验证 (2FA)！**
+
+### 命令行参数
+
+```bash
+# 重置管理员密码为 123456
+./goemail -reset
+
+# 重置管理员两步验证 (忘记 2FA 时使用)
+./goemail -reset-totp
+```
 
 ### 3️⃣ 发送第一封邮件
 
@@ -172,7 +184,9 @@ curl -X POST http://localhost:9901/api/v1/send \
 | **转发规则** | 精确/前缀/通配符匹配、多目标转发 | ✅ |
 | **域名管理** | 多域名支持、DKIM 自动生成、DNS 验证 | ✅ |
 | **发送通道** | SMTP 中继配置、直连发送、负载均衡 | ✅ |
-| **安全防护** | STARTTLS、速率限制、IP 黑名单、JWT | ✅ |
+| **安全防护** | **2FA 两步验证**、STARTTLS、速率限制、IP 黑名单 | ✅ |
+| **证书管理** | Let's Encrypt 自动申请、手动上传、自动续期 | ✅ |
+| **数据清理** | 自动定时清理、保留策略配置、手动清理 | ✅ |
 | **系统设置** | HTTPS、端口配置、备份恢复 | ✅ |
 | **API** | RESTful 接口、永久密钥、交互文档 | ✅ |
 
@@ -194,7 +208,10 @@ curl -X POST http://localhost:9901/api/v1/send \
   "receiver_port": "25",
   "receiver_tls": true,
   "receiver_rate_limit": 30,
-  "receiver_max_msg_size": 10240
+  "receiver_max_msg_size": 10240,
+  "cleanup_enabled": true,
+  "cleanup_email_log_days": 30,
+  "cleanup_inbox_days": 30
 }
 ```
 
@@ -246,7 +263,8 @@ _dmarc    TXT    "v=DMARC1; p=quarantine; rua=mailto:admin@example.com"
 | **后端** | Go 1.21+ · Gin · GORM · SQLite |
 | **前端** | HTML5 · TailwindCSS · Chart.js |
 | **邮件** | go-mail · go-msgauth (DKIM) · STARTTLS |
-| **安全** | bcrypt · JWT · Rate Limiter |
+| **安全** | bcrypt · JWT · TOTP (2FA) · Rate Limiter |
+| **证书** | ACME · Let's Encrypt · lego |
 
 ---
 
