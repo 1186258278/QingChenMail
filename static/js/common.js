@@ -500,9 +500,25 @@ const Modal = {
             okBtn.textContent = options.confirmText || (typeof I18n !== 'undefined' ? I18n.t('common.confirm') : '确定');
             cancelBtn.textContent = options.cancelText || (typeof I18n !== 'undefined' ? I18n.t('common.cancel') : '取消');
             
-            // 设置按钮样式
-            okBtn.className = 'px-5 py-2.5 rounded-lg shadow-md transition font-medium ' + 
-                (options.confirmClass || 'bg-blue-600 text-white hover:bg-blue-700');
+            // 设置按钮样式（使用内联样式确保颜色正确）
+            okBtn.className = 'px-5 py-2.5 rounded-lg shadow-md transition font-medium';
+            
+            // 根据类型设置按钮颜色
+            const colorMap = {
+                'bg-blue-600 text-white hover:bg-blue-700': { bg: '#2563eb', hover: '#1d4ed8', text: '#ffffff' },
+                'bg-green-600 text-white hover:bg-green-700': { bg: '#16a34a', hover: '#15803d', text: '#ffffff' },
+                'bg-red-600 text-white hover:bg-red-700': { bg: '#dc2626', hover: '#b91c1c', text: '#ffffff' },
+                'bg-orange-600 text-white hover:bg-orange-700': { bg: '#ea580c', hover: '#c2410c', text: '#ffffff' },
+                'bg-cyan-600 text-white hover:bg-cyan-700': { bg: '#0891b2', hover: '#0e7490', text: '#ffffff' },
+            };
+            
+            const btnClass = options.confirmClass || 'bg-blue-600 text-white hover:bg-blue-700';
+            const colors = colorMap[btnClass] || colorMap['bg-blue-600 text-white hover:bg-blue-700'];
+            
+            okBtn.style.backgroundColor = colors.bg;
+            okBtn.style.color = colors.text;
+            okBtn.onmouseenter = () => { okBtn.style.backgroundColor = colors.hover; };
+            okBtn.onmouseleave = () => { okBtn.style.backgroundColor = colors.bg; };
             
             // 显示模态框
             modal.classList.remove('hidden');

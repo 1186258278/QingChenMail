@@ -1174,7 +1174,7 @@
                             showToast(I18n.t('settings.toast.update_success') || '更新成功！', 'success');
                             showUpdateCompleteModal();
                         } else if (status.status === 'failed') {
-                            showToast(status.error || I18n.t('settings.toast.update_failed') || '更新失败', 'error');
+                            showUpdateFailedModal(status.error);
                         }
                         resetUpdateButton();
                     }
@@ -1219,6 +1219,90 @@
                 btn.classList.remove('bg-green-600', 'text-white', 'hover:bg-green-700');
                 btn.classList.add('bg-gray-100', 'text-gray-400', 'cursor-not-allowed');
             }
+        }
+
+        // 更新失败后的模态框
+        async function showUpdateFailedModal(errorMsg) {
+            // 构建错误信息
+            let message = I18n.t('settings.modal.update_failed_msg') || '更新下载失败，可能是网络问题或服务器暂时不可用。';
+            message += '\n\n';
+            message += (I18n.t('settings.modal.error_detail') || '错误详情') + ':\n' + (errorMsg || '未知错误');
+            message += '\n\n';
+            message += I18n.t('settings.modal.update_failed_hint') || '您可以选择重试或前往 GitHub 手动下载。';
+
+            // 使用自定义三按钮模态框
+            const action = await showUpdateFailedOptions(
+                I18n.t('settings.modal.update_failed_title') || '更新失败',
+                message
+            );
+
+            if (action === 'retry') {
+                // 重试更新
+                performUpdate();
+            } else if (action === 'manual') {
+                // 打开 GitHub Releases 页面
+                window.open('https://github.com/1186258278/QingChenMail/releases', '_blank');
+            }
+            // action === 'cancel' 时不做任何操作
+        }
+
+        // 更新失败选项模态框（三个按钮）
+        function showUpdateFailedOptions(title, message) {
+            return new Promise((resolve) => {
+                // 创建模态框
+                const modalId = 'update-failed-modal';
+                let modal = document.getElementById(modalId);
+                if (modal) modal.remove();
+
+                const modalHTML = `
+                    <div id="${modalId}" class="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center">
+                        <div class="bg-white rounded-xl p-6 w-[480px] shadow-2xl mx-4">
+                            <div class="flex items-start mb-4">
+                                <div class="flex-shrink-0 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mr-4">
+                                    <svg class="w-7 h-7 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                    </svg>
+                                </div>
+                                <div class="flex-1">
+                                    <h3 class="font-bold text-lg text-gray-800 mb-1">${title}</h3>
+                                </div>
+                            </div>
+                            <div class="text-gray-600 mb-6 whitespace-pre-line text-sm bg-gray-50 p-4 rounded-lg border max-h-48 overflow-y-auto">${Utils.escapeHtml(message)}</div>
+                            <div class="flex justify-end space-x-3">
+                                <button id="${modalId}-cancel" class="px-4 py-2.5 text-gray-600 hover:bg-gray-100 rounded-lg transition font-medium">
+                                    ${I18n.t('common.cancel') || '取消'}
+                                </button>
+                                <button id="${modalId}-manual" class="px-4 py-2.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition font-medium flex items-center">
+                                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                                    ${I18n.t('settings.modal.manual_download') || '手动下载'}
+                                </button>
+                                <button id="${modalId}-retry" class="px-4 py-2.5 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 shadow-md transition font-medium flex items-center">
+                                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                                    ${I18n.t('settings.modal.retry') || '重试'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                document.body.insertAdjacentHTML('beforeend', modalHTML);
+                modal = document.getElementById(modalId);
+
+                // 绑定事件
+                document.getElementById(`${modalId}-cancel`).onclick = () => { modal.remove(); resolve('cancel'); };
+                document.getElementById(`${modalId}-manual`).onclick = () => { modal.remove(); resolve('manual'); };
+                document.getElementById(`${modalId}-retry`).onclick = () => { modal.remove(); resolve('retry'); };
+
+                // ESC 关闭
+                const escHandler = (e) => {
+                    if (e.key === 'Escape') {
+                        modal.remove();
+                        document.removeEventListener('keydown', escHandler);
+                        resolve('cancel');
+                    }
+                };
+                document.addEventListener('keydown', escHandler);
+            });
         }
 
         // 更新完成后的模态框
