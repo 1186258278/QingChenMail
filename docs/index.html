@@ -1,0 +1,1262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>晴辰云邮 QingChen Mail - 企业级自建邮件系统</title>
+    <meta name="description" content="企业级自建邮件系统，发送/接收/营销一站式解决方案。一次部署，永久免费，数据100%自主掌控。">
+    <meta name="keywords" content="邮件系统,自建邮局,SMTP,邮件营销,企业邮件,Go,开源">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📧</text></svg>">
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="晴辰云邮 - 企业级自建邮件系统">
+    <meta property="og:description" content="发送/接收/营销一站式解决方案，一次部署永久免费">
+    <meta property="og:type" content="website">
+    
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-dark: #1d4ed8;
+            --secondary: #0ea5e9;
+            --accent: #06b6d4;
+            --bg-dark: #0f172a;
+            --bg-card: #1e293b;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border: #334155;
+            --success: #10b981;
+            --warning: #f59e0b;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* 动态背景 */
+        .bg-gradient {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(ellipse at 20% 20%, rgba(37, 99, 235, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(6, 182, 212, 0.1) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(14, 165, 233, 0.05) 0%, transparent 70%);
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        /* 导航栏 */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 1rem 2rem;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.9rem;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--text-primary);
+        }
+
+        .nav-btn {
+            padding: 0.5rem 1.25rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.2s;
+        }
+
+        .nav-btn:hover {
+            background: var(--primary-dark);
+        }
+
+        /* Hero 区域 */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 6rem 2rem 4rem;
+        }
+
+        .version-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: rgba(37, 99, 235, 0.2);
+            border: 1px solid rgba(37, 99, 235, 0.3);
+            border-radius: 20px;
+            font-size: 0.85rem;
+            color: var(--secondary);
+            margin-bottom: 1.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .version-badge:hover {
+            background: rgba(37, 99, 235, 0.3);
+        }
+
+        .version-badge .dot {
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .hero h1 {
+            font-size: clamp(2.5rem, 6vw, 4rem);
+            font-weight: 800;
+            line-height: 1.2;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero h1 span {
+            display: block;
+            font-size: 0.5em;
+            color: var(--text-secondary);
+            -webkit-text-fill-color: var(--text-secondary);
+            font-weight: 400;
+            margin-top: 0.5rem;
+        }
+
+        .hero-desc {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin-bottom: 2.5rem;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.875rem 1.75rem;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: none;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(37, 99, 235, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+        }
+
+        .btn-secondary {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--border);
+        }
+
+        /* 统计数据 */
+        .stats {
+            display: flex;
+            gap: 3rem;
+            margin-top: 4rem;
+            padding: 2rem;
+            background: rgba(30, 41, 59, 0.5);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--secondary);
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        /* 功能特性 */
+        .features {
+            padding: 6rem 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .section-title {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .section-title h2 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .section-title p {
+            color: var(--text-secondary);
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .feature-card {
+            padding: 2rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            transition: all 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--primary);
+            box-shadow: 0 10px 30px rgba(37, 99, 235, 0.1);
+        }
+
+        .feature-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, rgba(37, 99, 235, 0.2) 0%, rgba(6, 182, 212, 0.2) 100%);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .feature-card h3 {
+            font-size: 1.125rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .feature-card p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        /* 下载区域 */
+        .download-section {
+            padding: 6rem 2rem;
+            background: linear-gradient(180deg, transparent 0%, rgba(30, 41, 59, 0.3) 100%);
+        }
+
+        .download-container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .download-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            justify-content: center;
+        }
+
+        .tab-btn {
+            padding: 0.75rem 1.5rem;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+
+        .tab-btn.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+
+        .download-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2rem;
+        }
+
+        .release-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .release-info h3 {
+            font-size: 1.5rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .release-info .meta {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .release-tag {
+            padding: 0.5rem 1rem;
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .download-list {
+            display: grid;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .download-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.25rem;
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .download-item:hover {
+            border-color: var(--primary);
+            background: rgba(37, 99, 235, 0.1);
+        }
+
+        .download-item .info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .download-item .icon {
+            width: 40px;
+            height: 40px;
+            background: var(--bg-card);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+
+        .download-item .name {
+            font-weight: 500;
+        }
+
+        .download-item .size {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .download-item .btn-download {
+            padding: 0.5rem 1rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: background 0.2s;
+        }
+
+        .download-item .btn-download:hover {
+            background: var(--primary-dark);
+        }
+
+        .changelog-toggle {
+            width: 100%;
+            padding: 1rem;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            transition: all 0.2s;
+        }
+
+        .changelog-toggle:hover {
+            border-color: var(--primary);
+            color: var(--text-primary);
+        }
+
+        .changelog-content {
+            margin-top: 1rem;
+            padding: 1.5rem;
+            background: rgba(15, 23, 42, 0.5);
+            border-radius: 8px;
+            display: none;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .changelog-content.show {
+            display: block;
+        }
+
+        .changelog-content h4 {
+            margin-bottom: 0.5rem;
+            color: var(--secondary);
+        }
+
+        .changelog-content ul {
+            margin-left: 1.5rem;
+            color: var(--text-secondary);
+        }
+
+        .changelog-content li {
+            margin-bottom: 0.25rem;
+        }
+
+        /* 界面预览 */
+        .preview-section {
+            padding: 6rem 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .preview-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .preview-tab {
+            padding: 0.625rem 1.25rem;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+
+        .preview-tab.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+
+        .preview-container {
+            position: relative;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+        }
+
+        .preview-container img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .preview-container .placeholder {
+            aspect-ratio: 16/9;
+            background: var(--bg-card);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+        }
+
+        /* 快速开始 */
+        .quickstart {
+            padding: 6rem 2rem;
+            background: linear-gradient(180deg, rgba(30, 41, 59, 0.3) 0%, transparent 100%);
+        }
+
+        .quickstart-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .code-block {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 1.5rem;
+        }
+
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            background: rgba(15, 23, 42, 0.5);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .code-header span {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .copy-btn {
+            padding: 0.375rem 0.75rem;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+
+        .copy-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .code-content {
+            padding: 1rem 1.25rem;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+        }
+
+        .code-content .comment {
+            color: var(--text-secondary);
+        }
+
+        .code-content .command {
+            color: var(--success);
+        }
+
+        /* 页脚 */
+        footer {
+            padding: 4rem 2rem 2rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            gap: 3rem;
+        }
+
+        .footer-brand h3 {
+            font-size: 1.25rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .footer-brand p {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .footer-links h4 {
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            color: var(--text-secondary);
+        }
+
+        .footer-links ul {
+            list-style: none;
+        }
+
+        .footer-links a {
+            color: var(--text-primary);
+            text-decoration: none;
+            font-size: 0.9rem;
+            line-height: 2;
+            transition: color 0.2s;
+        }
+
+        .footer-links a:hover {
+            color: var(--secondary);
+        }
+
+        .footer-bottom {
+            max-width: 1200px;
+            margin: 3rem auto 0;
+            padding-top: 2rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+        }
+
+        .footer-bottom a {
+            color: var(--text-secondary);
+            text-decoration: none;
+        }
+
+        .footer-bottom a:hover {
+            color: var(--text-primary);
+        }
+
+        /* 加载动画 */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 0.75rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            nav {
+                padding: 1rem;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .stats {
+                flex-direction: column;
+                gap: 1.5rem;
+            }
+
+            .footer-content {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+
+            .footer-bottom {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+
+            .release-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .download-item {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+
+            .download-item .info {
+                flex-direction: column;
+            }
+        }
+
+        /* 滚动条样式 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-dark);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-secondary);
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-gradient"></div>
+
+    <!-- 导航栏 -->
+    <nav>
+        <a href="#" class="logo">
+            <div class="logo-icon">📧</div>
+            <span>晴辰云邮</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="#features">功能特性</a></li>
+            <li><a href="#download">下载安装</a></li>
+            <li><a href="#preview">界面预览</a></li>
+            <li><a href="#quickstart">快速开始</a></li>
+        </ul>
+        <a href="https://github.com/1186258278/QingChenMail" target="_blank" class="nav-btn">
+            ⭐ GitHub
+        </a>
+    </nav>
+
+    <!-- Hero 区域 -->
+    <section class="hero">
+        <a href="https://github.com/1186258278/QingChenMail/releases/latest" target="_blank" class="version-badge">
+            <span class="dot"></span>
+            <span id="latest-version">正在获取最新版本...</span>
+        </a>
+        
+        <h1>
+            晴辰云邮
+            <span>企业级自建邮件系统</span>
+        </h1>
+        
+        <p class="hero-desc">
+            发送/接收/营销一站式解决方案<br>
+            一次部署，永久免费，数据 100% 自主掌控
+        </p>
+        
+        <div class="hero-buttons">
+            <a href="#download" class="btn btn-primary">
+                📥 立即下载
+            </a>
+            <a href="https://github.com/1186258278/QingChenMail" target="_blank" class="btn btn-secondary">
+                📖 查看源码
+            </a>
+        </div>
+
+        <div class="stats">
+            <div class="stat-item">
+                <div class="stat-value" id="stars-count">--</div>
+                <div class="stat-label">GitHub Stars</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="downloads-count">--</div>
+                <div class="stat-label">总下载量</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="releases-count">--</div>
+                <div class="stat-label">版本发布</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 功能特性 -->
+    <section class="features" id="features">
+        <div class="section-title">
+            <h2>🚀 核心能力</h2>
+            <p>专为企业打造的邮件基础设施</p>
+        </div>
+
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">📤</div>
+                <h3>智能发信引擎</h3>
+                <p>直连发送 + SMTP 中继双模式，自动 DKIM 签名，高送达率保障</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📥</div>
+                <h3>邮件网关</h3>
+                <p>内置 SMTP Server，STARTTLS 加密，智能转发，MIME 解析</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <h3>营销任务</h3>
+                <p>批量发送、暂停恢复、实时进度、打开率/点击率统计</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🔐</div>
+                <h3>安全防护</h3>
+                <p>两步验证 (2FA)、速率限制、IP 黑名单、JWT 认证</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">📜</div>
+                <h3>证书管理</h3>
+                <p>Let's Encrypt 自动申请/续期，支持手动上传 SSL 证书</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🔧</div>
+                <h3>开发者友好</h3>
+                <p>RESTful API、永久密钥、模板引擎、Webhook 回调</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- 下载区域 -->
+    <section class="download-section" id="download">
+        <div class="download-container">
+            <div class="section-title">
+                <h2>📥 下载安装</h2>
+                <p>选择适合您系统的版本</p>
+            </div>
+
+            <div class="download-tabs">
+                <button class="tab-btn active" data-source="github">GitHub</button>
+                <button class="tab-btn" data-source="gitee">Gitee 镜像</button>
+            </div>
+
+            <div class="download-card">
+                <div class="release-header">
+                    <div class="release-info">
+                        <h3 id="release-version">加载中...</h3>
+                        <div class="meta" id="release-date">--</div>
+                    </div>
+                    <span class="release-tag">最新稳定版</span>
+                </div>
+
+                <div class="download-list" id="download-list">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        正在获取下载列表...
+                    </div>
+                </div>
+
+                <button class="changelog-toggle" onclick="toggleChangelog()">
+                    📋 查看更新日志
+                    <span id="changelog-arrow">▼</span>
+                </button>
+
+                <div class="changelog-content" id="changelog">
+                    <div id="changelog-body">加载中...</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 界面预览 -->
+    <section class="preview-section" id="preview">
+        <div class="section-title">
+            <h2>🖼️ 界面预览</h2>
+            <p>现代化 Web 管理后台</p>
+        </div>
+
+        <div class="preview-tabs">
+            <button class="preview-tab active" data-img="image/zh/01.png">登录页面</button>
+            <button class="preview-tab" data-img="image/zh/02.png">仪表盘</button>
+            <button class="preview-tab" data-img="image/zh/04.png">发送邮件</button>
+            <button class="preview-tab" data-img="image/zh/06.png">营销任务</button>
+            <button class="preview-tab" data-img="image/zh/07.png">收件箱</button>
+            <button class="preview-tab" data-img="image/zh/10.png">系统设置</button>
+        </div>
+
+        <div class="preview-container">
+            <img id="preview-img" src="image/zh/01.png" alt="界面预览">
+        </div>
+    </section>
+
+    <!-- 快速开始 -->
+    <section class="quickstart" id="quickstart">
+        <div class="quickstart-container">
+            <div class="section-title">
+                <h2>⚡ 快速开始</h2>
+                <p>三步完成部署</p>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span>1. 下载并解压</span>
+                    <button class="copy-btn" onclick="copyCode(this, 'wget https://github.com/1186258278/QingChenMail/releases/latest/download/goemail-linux-amd64.tar.gz\ntar -xzf goemail-linux-amd64.tar.gz')">复制</button>
+                </div>
+                <div class="code-content">
+                    <span class="comment"># Linux (amd64)</span><br>
+                    <span class="command">wget</span> https://github.com/1186258278/QingChenMail/releases/latest/download/goemail-linux-amd64.tar.gz<br>
+                    <span class="command">tar</span> -xzf goemail-linux-amd64.tar.gz
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span>2. 配置 (可选)</span>
+                    <button class="copy-btn" onclick="copyCode(this, 'cp config.example.json config.json\nvim config.json')">复制</button>
+                </div>
+                <div class="code-content">
+                    <span class="comment"># 复制示例配置并修改</span><br>
+                    <span class="command">cp</span> config.example.json config.json<br>
+                    <span class="command">vim</span> config.json
+                </div>
+            </div>
+
+            <div class="code-block">
+                <div class="code-header">
+                    <span>3. 启动服务</span>
+                    <button class="copy-btn" onclick="copyCode(this, './goemail')">复制</button>
+                </div>
+                <div class="code-content">
+                    <span class="comment"># 直接运行</span><br>
+                    <span class="command">./goemail</span><br><br>
+                    <span class="comment"># 默认账号: admin / 123456</span><br>
+                    <span class="comment"># 访问 http://localhost:8080</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 页脚 -->
+    <footer>
+        <div class="footer-content">
+            <div class="footer-brand">
+                <h3>📧 晴辰云邮</h3>
+                <p>企业级自建邮件系统<br>发送/接收/营销一站式解决方案</p>
+            </div>
+            <div class="footer-links">
+                <h4>资源</h4>
+                <ul>
+                    <li><a href="https://github.com/1186258278/QingChenMail" target="_blank">GitHub 仓库</a></li>
+                    <li><a href="https://github.com/1186258278/QingChenMail/releases" target="_blank">版本发布</a></li>
+                    <li><a href="INSTALL_zh-CN.md" target="_blank">部署指南</a></li>
+                </ul>
+            </div>
+            <div class="footer-links">
+                <h4>社区</h4>
+                <ul>
+                    <li><a href="https://github.com/1186258278/QingChenMail/issues" target="_blank">问题反馈</a></li>
+                    <li><a href="https://github.com/1186258278/QingChenMail/discussions" target="_blank">讨论区</a></li>
+                    <li><a href="https://github.com/1186258278/QingChenMail/blob/main/CONTRIBUTING.md" target="_blank">贡献指南</a></li>
+                </ul>
+            </div>
+            <div class="footer-links">
+                <h4>关于</h4>
+                <ul>
+                    <li><a href="https://qingchencloud.com" target="_blank">晴辰云</a></li>
+                    <li><a href="https://github.com/1186258278/QingChenMail/blob/main/LICENSE" target="_blank">开源许可 (MIT)</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2024-2026 晴辰云邮. 基于 MIT 许可证开源</span>
+            <span>
+                Made with ❤️ by 
+                <a href="https://github.com/1186258278" target="_blank">@1186258278</a>
+            </span>
+        </div>
+    </footer>
+
+    <script>
+        // GitHub API 配置
+        const GITHUB_REPO = '1186258278/QingChenMail';
+        const GITHUB_API = `https://api.github.com/repos/${GITHUB_REPO}`;
+        const GITEE_REPO = ''; // 如有 Gitee 镜像可配置
+
+        // 平台图标映射
+        const platformIcons = {
+            'windows': '🪟',
+            'linux': '🐧',
+            'darwin': '🍎',
+            'amd64': '💻',
+            'arm64': '📱',
+        };
+
+        // 格式化文件大小
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        // 格式化日期
+        function formatDate(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleDateString('zh-CN', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
+
+        // 获取平台图标
+        function getPlatformIcon(filename) {
+            const lower = filename.toLowerCase();
+            if (lower.includes('windows') || lower.includes('.exe')) return platformIcons.windows;
+            if (lower.includes('darwin') || lower.includes('macos')) return platformIcons.darwin;
+            if (lower.includes('linux')) return platformIcons.linux;
+            return '📦';
+        }
+
+        // 获取平台名称
+        function getPlatformName(filename) {
+            const lower = filename.toLowerCase();
+            let os = 'Unknown';
+            let arch = '';
+            
+            if (lower.includes('windows')) os = 'Windows';
+            else if (lower.includes('darwin') || lower.includes('macos')) os = 'macOS';
+            else if (lower.includes('linux')) os = 'Linux';
+            
+            if (lower.includes('amd64') || lower.includes('x86_64')) arch = 'x64';
+            else if (lower.includes('arm64') || lower.includes('aarch64')) arch = 'ARM64';
+            else if (lower.includes('386') || lower.includes('i386')) arch = 'x86';
+            
+            return arch ? `${os} (${arch})` : os;
+        }
+
+        // 获取仓库信息
+        async function fetchRepoInfo() {
+            try {
+                const res = await fetch(GITHUB_API);
+                const data = await res.json();
+                
+                document.getElementById('stars-count').textContent = data.stargazers_count || 0;
+            } catch (e) {
+                console.error('Failed to fetch repo info:', e);
+            }
+        }
+
+        // 获取发布信息
+        async function fetchReleases() {
+            try {
+                const res = await fetch(`${GITHUB_API}/releases`);
+                const releases = await res.json();
+                
+                if (!releases.length) {
+                    document.getElementById('download-list').innerHTML = '<div class="loading">暂无发布版本</div>';
+                    return;
+                }
+                
+                // 更新统计
+                document.getElementById('releases-count').textContent = releases.length;
+                
+                // 计算总下载量
+                let totalDownloads = 0;
+                releases.forEach(release => {
+                    release.assets.forEach(asset => {
+                        totalDownloads += asset.download_count;
+                    });
+                });
+                document.getElementById('downloads-count').textContent = totalDownloads;
+                
+                // 显示最新版本
+                const latest = releases[0];
+                displayRelease(latest);
+                
+                // 更新顶部版本标签
+                document.getElementById('latest-version').textContent = 
+                    `${latest.tag_name} 已发布 · ${formatDate(latest.published_at)}`;
+                    
+            } catch (e) {
+                console.error('Failed to fetch releases:', e);
+                document.getElementById('download-list').innerHTML = 
+                    '<div class="loading">获取发布信息失败，请直接访问 GitHub</div>';
+            }
+        }
+
+        // 显示发布信息
+        function displayRelease(release) {
+            document.getElementById('release-version').textContent = release.tag_name;
+            document.getElementById('release-date').textContent = 
+                `发布于 ${formatDate(release.published_at)}`;
+            
+            // 过滤并排序资源
+            const assets = release.assets
+                .filter(a => !a.name.endsWith('.txt') && !a.name.includes('checksums'))
+                .sort((a, b) => {
+                    // Windows 优先
+                    const aWin = a.name.toLowerCase().includes('windows');
+                    const bWin = b.name.toLowerCase().includes('windows');
+                    if (aWin && !bWin) return -1;
+                    if (!aWin && bWin) return 1;
+                    return a.name.localeCompare(b.name);
+                });
+            
+            if (!assets.length) {
+                document.getElementById('download-list').innerHTML = 
+                    '<div class="loading">该版本暂无可下载文件</div>';
+                return;
+            }
+            
+            let html = '';
+            assets.forEach(asset => {
+                html += `
+                    <div class="download-item">
+                        <div class="info">
+                            <div class="icon">${getPlatformIcon(asset.name)}</div>
+                            <div>
+                                <div class="name">${getPlatformName(asset.name)}</div>
+                                <div class="size">${asset.name} · ${formatSize(asset.size)}</div>
+                            </div>
+                        </div>
+                        <a href="${asset.browser_download_url}" class="btn-download" download>
+                            下载
+                        </a>
+                    </div>
+                `;
+            });
+            
+            document.getElementById('download-list').innerHTML = html;
+            
+            // 更新日志
+            document.getElementById('changelog-body').innerHTML = 
+                release.body ? marked.parse(release.body) : '暂无更新日志';
+        }
+
+        // 切换更新日志
+        function toggleChangelog() {
+            const content = document.getElementById('changelog');
+            const arrow = document.getElementById('changelog-arrow');
+            content.classList.toggle('show');
+            arrow.textContent = content.classList.contains('show') ? '▲' : '▼';
+        }
+
+        // 复制代码
+        function copyCode(btn, code) {
+            navigator.clipboard.writeText(code).then(() => {
+                const originalText = btn.textContent;
+                btn.textContent = '已复制!';
+                setTimeout(() => btn.textContent = originalText, 2000);
+            });
+        }
+
+        // 预览图片切换
+        document.querySelectorAll('.preview-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                document.querySelectorAll('.preview-tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                document.getElementById('preview-img').src = this.dataset.img;
+            });
+        });
+
+        // 下载源切换
+        document.querySelectorAll('.download-tabs .tab-btn').forEach(tab => {
+            tab.addEventListener('click', function() {
+                document.querySelectorAll('.download-tabs .tab-btn').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                // 可以在这里切换 Gitee 源
+            });
+        });
+
+        // 简单的 Markdown 解析器
+        const marked = {
+            parse: function(text) {
+                if (!text) return '';
+                return text
+                    .replace(/^### (.*$)/gim, '<h4>$1</h4>')
+                    .replace(/^## (.*$)/gim, '<h4>$1</h4>')
+                    .replace(/^# (.*$)/gim, '<h4>$1</h4>')
+                    .replace(/^\* (.*$)/gim, '<li>$1</li>')
+                    .replace(/^- (.*$)/gim, '<li>$1</li>')
+                    .replace(/\*\*(.*)\*\*/gim, '<strong>$1</strong>')
+                    .replace(/\*(.*)\*/gim, '<em>$1</em>')
+                    .replace(/`([^`]+)`/gim, '<code>$1</code>')
+                    .replace(/\n/gim, '<br>');
+            }
+        };
+
+        // 平滑滚动
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+
+        // 初始化
+        fetchRepoInfo();
+        fetchReleases();
+    </script>
+</body>
+</html>
