@@ -17,7 +17,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"goemail/internal/config"
@@ -327,17 +326,30 @@ func doUpdate(downloadURL, fileName string) error {
 	// 6. 使用 selfupdate 应用更新
 	setStatus("applying", 90, "正在替换程序文件...")
 
+	// 记录更新前的文件信息
+	if oldInfo, err := os.Stat(currentExe); err == nil {
+		fmt.Printf("[Update] 更新前文件: %s, 大小: %d bytes\n", currentExe, oldInfo.Size())
+	}
+
 	newBinary, err := os.Open(binaryPath)
 	if err != nil {
 		return fmt.Errorf("打开新版本文件失败: %w", err)
 	}
 	defer newBinary.Close()
 
+	// 记录新版本文件信息
+	if newInfo, err := os.Stat(binaryPath); err == nil {
+		fmt.Printf("[Update] 新版本文件: %s, 大小: %d bytes\n", binaryPath, newInfo.Size())
+	}
+
+	fmt.Printf("[Update] 正在使用 selfupdate 替换: %s\n", currentExe)
+
 	// 指定目标路径，避免 selfupdate 自动检测出错
 	err = selfupdate.Apply(newBinary, selfupdate.Options{
 		TargetPath: currentExe,
 	})
 	if err != nil {
+		fmt.Printf("[Update] selfupdate.Apply 失败: %v\n", err)
 		// 回滚
 		if rollbackErr := selfupdate.RollbackError(err); rollbackErr != nil {
 			return fmt.Errorf("更新失败且回滚失败: %w, rollback: %v", err, rollbackErr)
@@ -345,6 +357,12 @@ func doUpdate(downloadURL, fileName string) error {
 		return fmt.Errorf("更新失败 (已回滚): %w", err)
 	}
 
+	// 记录更新后的文件信息
+	if newInfo, err := os.Stat(currentExe); err == nil {
+		fmt.Printf("[Update] 更新后文件: %s, 大小: %d bytes\n", currentExe, newInfo.Size())
+	}
+
+	fmt.Println("[Update] 文件替换成功！")
 	setStatus("completed", 100, "更新完成！请重启服务以应用新版本。")
 	updateMutex.Lock()
 	currentStatus.NeedsRestart = true
@@ -643,30 +661,39 @@ func RestartHandler(c *gin.Context) {
 func RestartSelf() {
 	exe, err := os.Executable()
 	if err != nil {
-		fmt.Printf("获取程序路径失败: %v\n", err)
+		fmt.Printf("[Update] 获取程序路径失败: %v\n", err)
 		return
 	}
+	fmt.Printf("[Update] 当前程序路径: %s\n", exe)
 
-	exe, err = filepath.EvalSymlinks(exe)
-	if err != nil {
-		fmt.Printf("解析程序路径失败: %v\n", err)
-		return
+	// 尝试解析符号链接，失败则使用原路径（不要 return）
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+		fmt.Printf("[Update] 解析后路径: %s\n", exe)
+	} else {
+		fmt.Printf("[Update] 解析符号链接失败（使用原路径）: %v\n", err)
 	}
 
 	// 检查是否有待处理的更新
 	pendingUpdate := exe + ".pending"
 	if _, err := os.Stat(pendingUpdate); err == nil {
-		// 有待处理的更新，先应用
+		fmt.Printf("[Update] 发现待处理更新: %s\n", pendingUpdate)
 		if err := os.Rename(pendingUpdate, exe); err != nil {
-			fmt.Printf("应用待处理更新失败: %v\n", err)
+			fmt.Printf("[Update] 应用待处理更新失败: %v\n", err)
+		} else {
+			fmt.Println("[Update] 待处理更新已应用")
 		}
+	}
+
+	// 记录文件信息用于调试
+	if info, err := os.Stat(exe); err == nil {
+		fmt.Printf("[Update] 程序文件大小: %d bytes, 修改时间: %s\n", info.Size(), info.ModTime().Format("2006-01-02 15:04:05"))
 	}
 
 	fmt.Println("[Update] 正在重启服务...")
 
 	if runtime.GOOS == "windows" {
-		// Windows: 使用 cmd 启动新进程
-		// 创建一个批处理脚本来延迟启动
+		// Windows: 使用批处理脚本延迟启动
 		restartScript := filepath.Join(os.TempDir(), "goemail-restart.bat")
 		script := fmt.Sprintf(`@echo off
 ping 127.0.0.1 -n 2 > nul
@@ -674,31 +701,20 @@ start "" "%s"
 del "%%~f0"
 `, exe)
 		if err := os.WriteFile(restartScript, []byte(script), 0755); err != nil {
-			fmt.Printf("创建重启脚本失败: %v\n", err)
+			fmt.Printf("[Update] 创建重启脚本失败: %v\n", err)
 			return
 		}
 
 		cmd := exec.Command("cmd", "/C", restartScript)
 		cmd.Start()
+		fmt.Println("[Update] Windows 重启脚本已启动，程序即将退出...")
 		os.Exit(0)
 	} else {
-		// Linux/macOS: 使用 syscall.Exec 替换当前进程
-		args := os.Args
-		env := os.Environ()
-
-		fmt.Printf("[Update] 执行: %s %v\n", exe, args)
-
-		// 使用 syscall.Exec 直接替换进程
-		err := syscall.Exec(exe, args, env)
-		if err != nil {
-			fmt.Printf("重启失败: %v\n", err)
-			// 如果 syscall.Exec 失败，尝试使用 exec.Command
-			cmd := exec.Command(exe, args[1:]...)
-			cmd.Stdout = os.Stdout
-			cmd.Stderr = os.Stderr
-			cmd.Start()
-			os.Exit(0)
-		}
+		// Linux/macOS: 直接退出，让 systemd/supervisor 等服务管理器重启
+		// 这比 syscall.Exec 更可靠，特别是在 systemd 环境下
+		fmt.Println("[Update] 程序即将退出，等待服务管理器 (systemd/supervisor) 自动重启...")
+		fmt.Println("[Update] 如果服务没有自动重启，请确保 systemd 配置了 Restart=always")
+		os.Exit(0)
 	}
 }
 
