@@ -657,7 +657,39 @@ func RestartHandler(c *gin.Context) {
 	}()
 }
 
-// RestartSelf 重启当前程序
+// isRunningUnderServiceManager 检测是否在服务管理器下运行
+func isRunningUnderServiceManager() bool {
+	// 检测 systemd: INVOCATION_ID 环境变量
+	if os.Getenv("INVOCATION_ID") != "" {
+		fmt.Println("[Update] 检测到 systemd 环境 (INVOCATION_ID)")
+		return true
+	}
+
+	// 检测 supervisor
+	if os.Getenv("SUPERVISOR_ENABLED") != "" {
+		fmt.Println("[Update] 检测到 supervisor 环境")
+		return true
+	}
+
+	// 检测 Docker/容器环境
+	if _, err := os.Stat("/.dockerenv"); err == nil {
+		fmt.Println("[Update] 检测到 Docker 容器环境")
+		return true
+	}
+
+	// 检测父进程是否是 init (PID 1) - 通常意味着由服务管理器启动
+	if runtime.GOOS != "windows" {
+		ppid := os.Getppid()
+		if ppid == 1 {
+			fmt.Println("[Update] 检测到父进程为 init/systemd (PPID=1)")
+			return true
+		}
+	}
+
+	return false
+}
+
+// RestartSelf 重启当前程序（兼容所有环境）
 func RestartSelf() {
 	exe, err := os.Executable()
 	if err != nil {
@@ -694,28 +726,67 @@ func RestartSelf() {
 
 	if runtime.GOOS == "windows" {
 		// Windows: 使用批处理脚本延迟启动
-		restartScript := filepath.Join(os.TempDir(), "goemail-restart.bat")
-		script := fmt.Sprintf(`@echo off
+		restartWithScript(exe, "bat")
+	} else {
+		// Linux/macOS
+		if isRunningUnderServiceManager() {
+			// 在服务管理器下运行：直接退出，让管理器重启
+			fmt.Println("[Update] 程序即将退出，等待服务管理器自动重启...")
+			os.Exit(0)
+		} else {
+			// 独立运行：使用 shell 脚本重启
+			fmt.Println("[Update] 检测到独立运行模式，使用脚本重启...")
+			restartWithScript(exe, "sh")
+		}
+	}
+}
+
+// restartWithScript 使用脚本重启程序
+func restartWithScript(exe string, scriptType string) {
+	var scriptPath string
+	var script string
+	var cmd *exec.Cmd
+
+	if scriptType == "bat" {
+		// Windows 批处理
+		scriptPath = filepath.Join(os.TempDir(), "goemail-restart.bat")
+		script = fmt.Sprintf(`@echo off
 ping 127.0.0.1 -n 2 > nul
 start "" "%s"
 del "%%~f0"
 `, exe)
-		if err := os.WriteFile(restartScript, []byte(script), 0755); err != nil {
+		if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
 			fmt.Printf("[Update] 创建重启脚本失败: %v\n", err)
 			return
 		}
-
-		cmd := exec.Command("cmd", "/C", restartScript)
-		cmd.Start()
-		fmt.Println("[Update] Windows 重启脚本已启动，程序即将退出...")
-		os.Exit(0)
+		cmd = exec.Command("cmd", "/C", scriptPath)
 	} else {
-		// Linux/macOS: 直接退出，让 systemd/supervisor 等服务管理器重启
-		// 这比 syscall.Exec 更可靠，特别是在 systemd 环境下
-		fmt.Println("[Update] 程序即将退出，等待服务管理器 (systemd/supervisor) 自动重启...")
-		fmt.Println("[Update] 如果服务没有自动重启，请确保 systemd 配置了 Restart=always")
-		os.Exit(0)
+		// Unix shell 脚本
+		scriptPath = filepath.Join(os.TempDir(), "goemail-restart.sh")
+		// nohup 确保子进程不受父进程退出影响
+		// disown 或 & 让进程在后台运行
+		script = fmt.Sprintf(`#!/bin/bash
+sleep 1
+nohup "%s" > /dev/null 2>&1 &
+rm -f "$0"
+`, exe)
+		if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
+			fmt.Printf("[Update] 创建重启脚本失败: %v\n", err)
+			return
+		}
+		cmd = exec.Command("/bin/bash", scriptPath)
 	}
+
+	// 启动脚本（不等待）
+	cmd.Stdout = nil
+	cmd.Stderr = nil
+	if err := cmd.Start(); err != nil {
+		fmt.Printf("[Update] 启动重启脚本失败: %v\n", err)
+		return
+	}
+
+	fmt.Printf("[Update] 重启脚本已启动 (PID: %d)，程序即将退出...\n", cmd.Process.Pid)
+	os.Exit(0)
 }
 
 // ============================================
