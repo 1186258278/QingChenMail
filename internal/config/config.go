@@ -10,7 +10,7 @@ import (
 	"os"
 )
 
-const Version = "v1.2.3"
+const Version = "v1.2.4"
 
 type Config struct {
 	Domain         string `json:"domain"`
