@@ -1,7 +1,9 @@
 package database
 
 import (
+	"crypto/rand"
 	"log"
+	"math/big"
 	"time"
 
 	"github.com/glebarez/sqlite"
@@ -9,6 +11,21 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
+
+// generateInitialPassword 生成随机初始密码 (8位字母数字)
+func generateInitialPassword() string {
+	const letters = "0123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz"
+	ret := make([]byte, 8)
+	for i := 0; i < 8; i++ {
+		num, err := rand.Int(rand.Reader, big.NewInt(int64(len(letters))))
+		if err != nil {
+			ret[i] = letters[i%len(letters)]
+			continue
+		}
+		ret[i] = letters[num.Int64()]
+	}
+	return string(ret)
+}
 
 var DB *gorm.DB
 
@@ -46,6 +63,15 @@ func InitDB() {
 	})
 	if err != nil {
 		log.Fatalf("[DB] Failed to connect: %v", err)
+	}
+
+	// 优化 SQLite 并发性能
+	sqlDB, err := DB.DB()
+	if err == nil {
+		sqlDB.Exec("PRAGMA journal_mode=WAL")
+		sqlDB.Exec("PRAGMA busy_timeout=5000")
+		sqlDB.Exec("PRAGMA synchronous=NORMAL")
+		sqlDB.SetMaxOpenConns(1) // SQLite 单写者模型
 	}
 
 	log.Println("[DB] Connection established. Starting calibration...")
@@ -154,12 +180,18 @@ func runSeeding() {
 	var adminCount int64
 	DB.Model(&User{}).Where("username = ?", "admin").Count(&adminCount)
 	if adminCount == 0 {
+		// 生成随机初始密码并打印到控制台
+		defaultPass := generateInitialPassword()
 		log.Println("[DB] Seeding default admin user...")
-		// 使用 Bcrypt 哈希存储默认密码
-		hashedPassword, err := HashPassword("123456")
+		log.Printf("╔══════════════════════════════════════════════╗")
+		log.Printf("║  Default admin password: %-20s ║", defaultPass)
+		log.Printf("║  Please change it after first login!        ║")
+		log.Printf("╚══════════════════════════════════════════════╝")
+
+		hashedPassword, err := HashPassword(defaultPass)
 		if err != nil {
 			log.Printf("[DB] Warning: Failed to hash default password: %v, using plain text", err)
-			DB.Create(&User{Username: "admin", Password: "123456"})
+			DB.Create(&User{Username: "admin", Password: defaultPass})
 		} else {
 			DB.Create(&User{Username: "admin", Password: hashedPassword})
 		}

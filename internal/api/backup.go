@@ -81,8 +81,20 @@ func RestoreBackupHandler(c *gin.Context) {
 		return
 	}
 
-	// 验证备份是否存在
+	// 路径遍历防护：确保路径在备份目录内
 	backupPath := filepath.Join(backupDir, backupID)
+	absPath, err := filepath.Abs(backupPath)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的备份路径"})
+		return
+	}
+	absBackupDir, _ := filepath.Abs(backupDir)
+	if !strings.HasPrefix(absPath, absBackupDir) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的备份路径"})
+		return
+	}
+
+	// 验证备份是否存在
 	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "备份不存在"})
 		return

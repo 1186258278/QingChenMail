@@ -31,6 +31,10 @@ api_doc_mcp.log
 # Internal Docs
 docs/RELEASE_WORKFLOW_zh-CN.md
 
+# AI 上下文记忆文档（跨会话持久化，不提交）
+.context.md
+CONTEXT.local.md
+
 # OS specific
 .DS_Store
 Thumbs.db

@@ -8,9 +8,10 @@ import (
 	"encoding/pem"
 	"math/big"
 	"os"
+	"sync"
 )
 
-const Version = "v1.2.4"
+const Version = "v1.3.0"
 
 type Config struct {
 	Domain         string `json:"domain"`
@@ -55,7 +56,10 @@ type Config struct {
 	JWTSecret      string `json:"jwt_secret"`
 }
 
-var AppConfig Config
+var (
+	AppConfig  Config
+	ConfigMu   sync.RWMutex // 保护 AppConfig 的并发读写
+)
 
 func LoadConfig() {
 	// 默认配置

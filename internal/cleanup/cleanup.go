@@ -1,6 +1,7 @@
 package cleanup
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -33,9 +34,11 @@ type DataStats struct {
 }
 
 var (
-	cleanupMutex sync.Mutex
-	isRunning    bool
-	stopChan     chan struct{}
+	cleanupMutex    sync.Mutex
+	isRunning       bool
+	stopChan        chan struct{}
+	schedulerMu     sync.Mutex
+	schedulerActive bool
 )
 
 // GetStats 获取各表数据量统计
@@ -145,7 +148,7 @@ func cleanEmailLogs(days int) int64 {
 	return total
 }
 
-// cleanInbox 分批清理收件箱
+// cleanInbox 分批清理收件箱（同时清理关联的附件）
 func cleanInbox(days int) int64 {
 	cutoff := time.Now().AddDate(0, 0, -days)
 	var total int64
@@ -159,6 +162,23 @@ func cleanInbox(days int) int64 {
 
 		if len(ids) == 0 {
 			break
+		}
+
+		// 清理关联的附件文件（磁盘 + 数据库记录）
+		for _, inboxID := range ids {
+			relatedTo := fmt.Sprintf("inbox:%d", inboxID)
+			var attachments []database.AttachmentFile
+			database.DB.Where("related_to = ?", relatedTo).Find(&attachments)
+			for _, att := range attachments {
+				if att.FilePath != "" {
+					fullPath := att.FilePath
+					if !filepath.IsAbs(fullPath) {
+						fullPath = filepath.Join(".", fullPath)
+					}
+					os.Remove(fullPath)
+				}
+			}
+			database.DB.Unscoped().Where("related_to = ?", relatedTo).Delete(&database.AttachmentFile{})
 		}
 
 		result := database.DB.Unscoped().
@@ -180,7 +200,7 @@ func cleanQueue(days int) int64 {
 	for {
 		var ids []uint
 		database.DB.Model(&database.EmailQueue{}).
-			Where("created_at < ? AND status IN ?", cutoff, []string{"completed", "failed"}).
+			Where("created_at < ? AND status IN ?", cutoff, []string{"completed", "failed", "dead"}).
 			Limit(1000).
 			Pluck("id", &ids)
 
@@ -296,7 +316,14 @@ func cleanEmptyDirs(dir string) {
 
 // StartScheduler 启动定时清理任务
 func StartScheduler() {
+	schedulerMu.Lock()
+	if schedulerActive {
+		schedulerMu.Unlock()
+		return
+	}
 	stopChan = make(chan struct{})
+	schedulerActive = true
+	schedulerMu.Unlock()
 
 	go func() {
 		// 启动时执行一次清理
@@ -333,8 +360,11 @@ func StartScheduler() {
 
 // StopScheduler 停止定时清理任务
 func StopScheduler() {
-	if stopChan != nil {
+	schedulerMu.Lock()
+	defer schedulerMu.Unlock()
+	if schedulerActive && stopChan != nil {
 		close(stopChan)
+		schedulerActive = false
 	}
 }
 

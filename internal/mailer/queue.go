@@ -15,6 +15,9 @@ const (
 	WorkerPool    = 5               // 并发 Worker 数量
 )
 
+// workerSemaphore 控制最大并发 goroutine 数量
+var workerSemaphore = make(chan struct{}, WorkerPool)
+
 // SendEmailAsync 将邮件请求加入队列
 func SendEmailAsync(req SendRequest) (uint, error) {
 	// 序列化附件
@@ -103,9 +106,11 @@ func processQueue() {
 			continue // 已经被其他 worker 抢占
 		}
 		
-		// 重新赋值 task 以确保 goroutine 使用正确的数据 (尽管这里已经是拷贝的 task)
+		// 获取信号量槽位，限制最大并发数
 		t := task
+		workerSemaphore <- struct{}{}
 		go func(t database.EmailQueue) {
+			defer func() { <-workerSemaphore }() // 释放信号量
 			if err := executeTask(t); err != nil {
 				// 失败处理
 				newRetries := t.Retries + 1

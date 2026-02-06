@@ -18,7 +18,6 @@ import (
 	mathrand "math/rand"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -27,9 +26,14 @@ import (
 	"sync"
 	"time"
 
+	"crypto/subtle"
+	"strconv"
+
 	"goemail/internal/config"
+	"goemail/internal/crypto"
 	"goemail/internal/database"
 	"goemail/internal/mailer"
+	"goemail/internal/security"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -53,10 +57,39 @@ type RateLimiter struct {
 
 // NewRateLimiter 创建速率限制器
 func NewRateLimiter(limit int, window time.Duration) *RateLimiter {
-	return &RateLimiter{
+	rl := &RateLimiter{
 		requests: make(map[string][]time.Time),
 		limit:    limit,
 		window:   window,
+	}
+	// 后台定期清理过期记录，防止内存无限增长
+	go func() {
+		for {
+			time.Sleep(window)
+			rl.cleanup()
+		}
+	}()
+	return rl
+}
+
+// cleanup 清理过期的速率限制记录
+func (rl *RateLimiter) cleanup() {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	cutoff := time.Now().Add(-rl.window)
+	for ip, times := range rl.requests {
+		var valid []time.Time
+		for _, t := range times {
+			if t.After(cutoff) {
+				valid = append(valid, t)
+			}
+		}
+		if len(valid) == 0 {
+			delete(rl.requests, ip)
+		} else {
+			rl.requests[ip] = valid
+		}
 	}
 }
 
@@ -272,8 +305,8 @@ func LoginHandler(c *gin.Context) {
 		delete(captchaStore, req.CaptchaID) // 一次性
 		captchaMutex.Unlock()
 
-		// 验证码过期检查
-		if !ok || entry.Code != req.CaptchaCode || time.Now().After(entry.ExpiresAt) {
+		// 验证码过期检查 (使用常量时间比较防止时序攻击)
+		if !ok || subtle.ConstantTimeCompare([]byte(entry.Code), []byte(req.CaptchaCode)) != 1 || time.Now().After(entry.ExpiresAt) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired captcha code"})
 			return
 		}
@@ -435,10 +468,21 @@ func CreateSMTPHandler(c *gin.Context) {
 		database.DB.Model(&database.SMTPConfig{}).Where("is_default = ?", true).Update("is_default", false)
 	}
 
+	// 加密 SMTP 密码
+	if smtp.Password != "" {
+		encrypted, err := crypto.Encrypt(smtp.Password, config.AppConfig.JWTSecret)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to encrypt password"})
+			return
+		}
+		smtp.Password = encrypted
+	}
+
 	if err := database.DB.Create(&smtp).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	smtp.Password = "******"
 	c.JSON(http.StatusOK, smtp)
 }
 
@@ -465,8 +509,13 @@ func UpdateSMTPHandler(c *gin.Context) {
 	smtp.Host = req.Host
 	smtp.Port = req.Port
 	smtp.Username = req.Username
-	if req.Password != "" { // 仅当提供新密码时更新
-		smtp.Password = req.Password
+	if req.Password != "" && req.Password != "******" { // 仅当提供新密码时更新
+		encrypted, err := crypto.Encrypt(req.Password, config.AppConfig.JWTSecret)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to encrypt password"})
+			return
+		}
+		smtp.Password = encrypted
 	}
 	smtp.SSL = req.SSL
 	smtp.IsDefault = req.IsDefault
@@ -492,8 +541,21 @@ func ListSMTPHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, smtps)
 }
 
+// parseIDParam 解析并验证 URL 路径中的 ID 参数
+func parseIDParam(c *gin.Context) (uint64, bool) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil || id == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid ID"})
+		return 0, false
+	}
+	return id, true
+}
+
 func DeleteSMTPHandler(c *gin.Context) {
-	id := c.Param("id")
+	id, ok := parseIDParam(c)
+	if !ok {
+		return
+	}
 	database.DB.Delete(&database.SMTPConfig{}, id)
 	c.JSON(http.StatusOK, gin.H{"message": "Deleted"})
 }
@@ -597,7 +659,10 @@ func ListDomainHandler(c *gin.Context) {
 }
 
 func DeleteDomainHandler(c *gin.Context) {
-	id := c.Param("id")
+	id, ok := parseIDParam(c)
+	if !ok {
+		return
+	}
 	database.DB.Delete(&database.Domain{}, id)
 	c.JSON(http.StatusOK, gin.H{"message": "Deleted"})
 }
@@ -786,7 +851,10 @@ func ListTemplateHandler(c *gin.Context) {
 }
 
 func DeleteTemplateHandler(c *gin.Context) {
-	id := c.Param("id")
+	id, ok := parseIDParam(c)
+	if !ok {
+		return
+	}
 	database.DB.Delete(&database.Template{}, id)
 	c.JSON(http.StatusOK, gin.H{"message": "Deleted"})
 }
@@ -809,6 +877,11 @@ func SendHandler(c *gin.Context) {
 
 		// 渲染 Subject
 		if tpl.Subject != "" {
+			// 安全检查：禁止高级模板指令，防止模板注入
+			if containsUnsafeTemplateActions(tpl.Subject) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Template subject contains unsafe directives"})
+				return
+			}
 			t, err := template.New("subject").Parse(tpl.Subject)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse template subject: " + err.Error()})
@@ -824,7 +897,11 @@ func SendHandler(c *gin.Context) {
 
 		// 渲染 Body
 		if tpl.Body != "" {
-			// 使用 html/template 确保安全性，但也允许变量替换
+			// 安全检查：禁止高级模板指令，防止模板注入
+			if containsUnsafeTemplateActions(tpl.Body) {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Template body contains unsafe directives"})
+				return
+			}
 			t, err := template.New("body").Parse(tpl.Body)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse template body: " + err.Error()})
@@ -857,8 +934,8 @@ func SendHandler(c *gin.Context) {
 				fileData, err = base64.StdEncoding.DecodeString(att.Content)
 			} else if att.URL != "" {
 				sourceType = "api_url"
-				// 安全修复：SSRF 防护，检查是否为内网 URL
-				if isInternalURLCheck(att.URL) {
+			// 安全修复：SSRF 防护，检查是否为内网 URL
+			if security.IsInternalURL(att.URL) {
 					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Attachment URL %s is blocked (internal network)", att.Filename)})
 					return
 				}
@@ -930,15 +1007,47 @@ func StatsHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, stats)
 }
 
-// LogsHandler 获取日志
+// LogsHandler 获取日志 (支持分页和过滤)
 func LogsHandler(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "50"))
+	status := c.Query("status")
+	search := c.Query("search")
+
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 200 {
+		pageSize = 50
+	}
+	offset := (page - 1) * pageSize
+
+	// 排除 Body 字段以减少传输量
+	query := database.DB.Model(&database.EmailLog{}).
+		Select("id, created_at, updated_at, recipient, subject, status, error_msg, client_ip, channel, campaign_id, tracking_id, opened, opened_at, clicked_count, unsubscribed")
+
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if search != "" {
+		query = query.Where("recipient LIKE ? OR subject LIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+
+	var total int64
+	query.Count(&total)
+
 	var logs []database.EmailLog
-	result := database.DB.Order("created_at desc").Limit(100).Find(&logs)
+	result := query.Order("created_at desc").Offset(offset).Limit(pageSize).Find(&logs)
 	if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": result.Error.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, logs)
+	c.JSON(http.StatusOK, gin.H{
+		"data":      logs,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+	})
 }
 
 // GenerateDKIMHandler 生成新的 DKIM 密钥
@@ -1060,14 +1169,20 @@ func UpdateConfigHandler(c *gin.Context) {
 		ln.Close()
 	}
 
+	// 检测 JWT Secret 是否发生变化 (需在赋值前比较)
+	oldSecret := config.AppConfig.JWTSecret
+
+	config.ConfigMu.Lock()
 	config.AppConfig = newConfig
-	if err := config.SaveConfig(config.AppConfig); err != nil {
+	config.ConfigMu.Unlock()
+
+	if err := config.SaveConfig(newConfig); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	
 	msg := "Config updated"
-	if newConfig.JWTSecret != config.AppConfig.JWTSecret { // 如果 Secret 变了
+	if newConfig.JWTSecret != oldSecret {
 		msg = "Config updated & Token reset"
 	}
 	c.JSON(http.StatusOK, gin.H{"message": msg})
@@ -1109,7 +1224,10 @@ func CreateAPIKeyHandler(c *gin.Context) {
 }
 
 func DeleteAPIKeyHandler(c *gin.Context) {
-	id := c.Param("id")
+	id, ok := parseIDParam(c)
+	if !ok {
+		return
+	}
 	database.DB.Delete(&database.APIKey{}, id)
 	c.JSON(http.StatusOK, gin.H{"message": "Deleted"})
 }
@@ -1288,9 +1406,26 @@ func isHex(s string) bool {
 // --- File Management ---
 
 func ListFilesHandler(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "50"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 200 {
+		pageSize = 50
+	}
+
+	var total int64
+	database.DB.Model(&database.AttachmentFile{}).Count(&total)
+
 	var files []database.AttachmentFile
-	database.DB.Order("created_at desc").Limit(100).Find(&files)
-	c.JSON(http.StatusOK, files)
+	database.DB.Order("created_at desc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&files)
+	c.JSON(http.StatusOK, gin.H{
+		"data":      files,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+	})
 }
 
 func DeleteFileHandler(c *gin.Context) {
@@ -1445,7 +1580,10 @@ func UpdateForwardRuleHandler(c *gin.Context) {
 
 // DeleteForwardRuleHandler 删除转发规则
 func DeleteForwardRuleHandler(c *gin.Context) {
-	id := c.Param("id")
+	id, ok := parseIDParam(c)
+	if !ok {
+		return
+	}
 	database.DB.Delete(&database.ForwardRule{}, id)
 	c.JSON(http.StatusOK, gin.H{"message": "Deleted"})
 }
@@ -1465,11 +1603,28 @@ func ToggleForwardRuleHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, rule)
 }
 
-// ListForwardLogsHandler 获取转发日志
+// ListForwardLogsHandler 获取转发日志 (支持分页)
 func ListForwardLogsHandler(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "50"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 200 {
+		pageSize = 50
+	}
+
+	var total int64
+	database.DB.Model(&database.ForwardLog{}).Count(&total)
+
 	var logs []database.ForwardLog
-	database.DB.Order("created_at desc").Limit(100).Find(&logs)
-	c.JSON(http.StatusOK, logs)
+	database.DB.Order("created_at desc").Offset((page - 1) * pageSize).Limit(pageSize).Find(&logs)
+	c.JSON(http.StatusOK, gin.H{
+		"data":      logs,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+	})
 }
 
 // GetForwardStatsHandler 获取转发统计
@@ -1583,111 +1738,21 @@ func getProcessInfo(port string) string {
 	return "Unknown process"
 }
 
-// KillProcessHandler 强制关闭占用端口的进程
+// KillProcessHandler 强制关闭占用端口的进程 (已禁用)
 func KillProcessHandler(c *gin.Context) {
-	// 禁用远程进程终止功能
-	// 如需启用，请配置 EnableProcessControl (暂未实现配置项，目前默认禁用)
-	// 
-	// 如果确实需要在开发环境使用，请手动注释下行：
 	c.JSON(http.StatusForbidden, gin.H{"error": "Remote process control is disabled for security reasons."})
-	return
-
-	/* 
-	var req struct {
-		PID string `json:"pid"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	if req.PID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "PID is required"})
-		return
-	}
-
-	// 1. 安全检查：是否为系统关键进程
-	procName := getProcessNameByPID(req.PID)
-	if procName == "" {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Process not found or already terminated"})
-		return
-	}
-
-	if isSystemProcess(procName) {
-		c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("Cannot kill system process: %s", procName)})
-		return
-	}
-
-	// 2. 执行关闭
-	if err := killProcess(req.PID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to kill process: %v", err)})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("Process %s (PID: %s) terminated successfully", procName, req.PID)})
-	*/
 }
 
-func getProcessNameByPID(pid string) string {
-	if runtime.GOOS == "windows" {
-		cmd := exec.Command("tasklist", "/FI", "PID eq "+pid, "/FO", "CSV", "/NH")
-		out, err := cmd.Output()
-		if err == nil {
-			parts := strings.Split(string(out), ",")
-			if len(parts) > 0 {
-				return strings.Trim(parts[0], "\"")
-			}
-		}
-	} else {
-		cmd := exec.Command("ps", "-p", pid, "-o", "comm=")
-		out, err := cmd.Output()
-		if err == nil {
-			return strings.TrimSpace(string(out))
-		}
+// containsUnsafeTemplateActions 检测模板中是否包含不安全的指令
+// 禁止 {{define}}, {{template}}, {{block}} 等可能导致注入或递归的指令
+func containsUnsafeTemplateActions(tmpl string) bool {
+	unsafePatterns := []string{
+		"{{define", "{{template", "{{block",
+		"{{ define", "{{ template", "{{ block",
 	}
-	return ""
-}
-
-func isSystemProcess(name string) bool {
-	systemProcs := []string{
-		"system", "system idle process", "smss.exe", "csrss.exe", "wininit.exe", 
-		"services.exe", "lsass.exe", "svchost.exe", "winlogon.exe", "explorer.exe",
-		"init", "systemd", "kthreadd", "rcu_sched",
-	}
-	nameLower := strings.ToLower(name)
-	for _, p := range systemProcs {
-		if nameLower == p {
-			return true
-		}
-	}
-	return false
-}
-
-func killProcess(pid string) error {
-	if runtime.GOOS == "windows" {
-		// taskkill /F /PID <pid>
-		return exec.Command("taskkill", "/F", "/PID", pid).Run()
-	} else {
-		// kill -9 <pid>
-		return exec.Command("kill", "-9", pid).Run()
-	}
-}
-
-// isInternalURLCheck 检查 URL 是否指向内网 (SSRF 防护)
-func isInternalURLCheck(rawURL string) bool {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return true // 解析失败视为不安全
-	}
-
-	host := u.Hostname()
-	ips, err := net.LookupIP(host)
-	if err != nil {
-		return true // DNS 解析失败视为不安全
-	}
-
-	for _, ip := range ips {
-		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+	lower := strings.ToLower(tmpl)
+	for _, p := range unsafePatterns {
+		if strings.Contains(lower, p) {
 			return true
 		}
 	}

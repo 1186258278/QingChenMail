@@ -11,7 +11,6 @@ import (
 	"net"
 	"net/http"
 	"net/smtp"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -19,7 +18,9 @@ import (
 	"time"
 
 	"goemail/internal/config"
+	"goemail/internal/crypto"
 	"goemail/internal/database"
+	"goemail/internal/security"
 
 	"github.com/emersion/go-msgauth/dkim"
 	"github.com/wneessen/go-mail"
@@ -113,8 +114,8 @@ func SendEmail(req SendRequest) error {
 					},
 				}
 
-				// 检查 URL 是否指向内网
-				if isInternalURL(att.URL) {
+			// 检查 URL 是否指向内网
+			if security.IsInternalURL(att.URL) {
 					return logAndReturnError(req, fmt.Sprintf("blocked_internal_url: %s", att.URL), fmt.Errorf("access to internal network is blocked"))
 				}
 
@@ -218,27 +219,6 @@ func SendEmail(req SendRequest) error {
 	}
 }
 
-// isInternalURL 检查 URL 是否指向内网 (SSRF防护)
-func isInternalURL(rawURL string) bool {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return true // 解析失败视为不安全
-	}
-	
-	host := u.Hostname()
-	ips, err := net.LookupIP(host)
-	if err != nil {
-		return true // DNS 解析失败视为不安全
-	}
-
-	for _, ip := range ips {
-		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
-			return true
-		}
-	}
-	return false
-}
-
 // sendByRelay 包装器
 func sendByRelay(req SendRequest, from, to string, msg []byte, channelID uint) error {
 	var cfg database.SMTPConfig
@@ -251,7 +231,12 @@ func sendByRelay(req SendRequest, from, to string, msg []byte, channelID uint) e
 // sendWithSMTPConfig 核心 SMTP 发送逻辑
 func sendWithSMTPConfig(req SendRequest, from, to string, msg []byte, cfg database.SMTPConfig) error {
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
-	auth := smtp.PlainAuth("", cfg.Username, cfg.Password, cfg.Host)
+	// 解密 SMTP 密码（兼容旧版未加密密码）
+	smtpPassword, err := crypto.Decrypt(cfg.Password, config.AppConfig.JWTSecret)
+	if err != nil {
+		smtpPassword = cfg.Password // 解密失败则回退为原始值（兼容旧数据）
+	}
+	auth := smtp.PlainAuth("", cfg.Username, smtpPassword, cfg.Host)
 
 	// 默认强制 TLS 验证
 	// 为了兼容性，我们暂时使用 InsecureSkipVerify: false (安全模式)

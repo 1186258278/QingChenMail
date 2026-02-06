@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"flag"
 	"fmt"
@@ -8,6 +9,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"goemail/internal/api"
 	"goemail/internal/cert"
@@ -93,6 +97,33 @@ func main() {
 	// 3. 设置 Gin
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
+
+	// CORS 中间件 (支持前后端分离部署)
+	r.Use(func(c *gin.Context) {
+		c.Header("Access-Control-Allow-Origin", c.GetHeader("Origin"))
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+		c.Header("Access-Control-Allow-Credentials", "true")
+		c.Header("Access-Control-Max-Age", "86400")
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+		c.Next()
+	})
+
+	// 请求日志中间件 (审计追踪)
+	r.Use(func(c *gin.Context) {
+		start := time.Now()
+		path := c.Request.URL.Path
+		c.Next()
+		latency := time.Since(start)
+		status := c.Writer.Status()
+		// 记录非静态资源请求
+		if len(path) > 4 && path[:5] == "/api/" {
+			log.Printf("[Audit] %s %s %d %v %s", c.Request.Method, path, status, latency, c.ClientIP())
+		}
+	})
 
 	// 请求体大小限制 (32MB)
 	r.MaxMultipartMemory = 32 << 20
@@ -309,15 +340,42 @@ func main() {
 	
 	fmt.Printf("QingChen Mail server starting on %s...\n", addr)
 	
-	if config.AppConfig.EnableSSL && config.AppConfig.CertFile != "" && config.AppConfig.KeyFile != "" {
-		fmt.Printf("SSL Enabled. Dashboard: https://%s:%s/dashboard/\n", host, port)
-		if err := r.RunTLS(addr, config.AppConfig.CertFile, config.AppConfig.KeyFile); err != nil {
-			log.Fatal("SSL Start Failed: ", err)
-		}
-	} else {
-		fmt.Printf("Dashboard: http://%s:%s/dashboard/\n", host, port)
-		if err := r.Run(addr); err != nil {
-			log.Fatal(err)
-		}
+	// 使用 http.Server 实现优雅关闭
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: r,
 	}
+
+	// 在 goroutine 中启动服务
+	go func() {
+		var err error
+		if config.AppConfig.EnableSSL && config.AppConfig.CertFile != "" && config.AppConfig.KeyFile != "" {
+			fmt.Printf("SSL Enabled. Dashboard: https://%s:%s/dashboard/\n", host, port)
+			err = srv.ListenAndServeTLS(config.AppConfig.CertFile, config.AppConfig.KeyFile)
+		} else {
+			fmt.Printf("Dashboard: http://%s:%s/dashboard/\n", host, port)
+			err = srv.ListenAndServe()
+		}
+		if err != nil && err != http.ErrServerClosed {
+			log.Fatalf("Server start failed: %v", err)
+		}
+	}()
+
+	// 等待中断信号，优雅关闭
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("Shutting down server...")
+
+	// 停止定时任务
+	cleanup.StopScheduler()
+
+	// 给请求 10 秒钟完成
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatal("Server forced to shutdown:", err)
+	}
+
+	log.Println("Server exited gracefully")
 }

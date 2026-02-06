@@ -192,6 +192,24 @@ func PerformUpdateHandler(c *gin.Context) {
 		return
 	}
 
+	// 安全验证：仅允许从官方 GitHub 仓库下载
+	allowedPrefixes := []string{
+		"https://github.com/1186258278/QingChenMail/releases/",
+		"https://objects.githubusercontent.com/",
+	}
+	urlAllowed := false
+	for _, prefix := range allowedPrefixes {
+		if strings.HasPrefix(req.DownloadURL, prefix) {
+			urlAllowed = true
+			break
+		}
+	}
+	if !urlAllowed {
+		setStatusError("不允许的下载地址")
+		c.JSON(http.StatusBadRequest, gin.H{"error": "仅允许从官方 GitHub 仓库下载更新"})
+		return
+	}
+
 	// 异步执行更新
 	go func() {
 		if err := doUpdate(req.DownloadURL, req.FileName); err != nil {
@@ -411,7 +429,11 @@ func extractTarGz(archivePath, destDir string) (string, error) {
 			return "", err
 		}
 
+		// Zip Slip 防护：确保解压路径在目标目录内
 		target := filepath.Join(destDir, header.Name)
+		if absTarget, err := filepath.Abs(target); err != nil || !strings.HasPrefix(absTarget, destDir) {
+			continue // 跳过恶意路径
+		}
 
 		switch header.Typeflag {
 		case tar.TypeDir:
@@ -452,6 +474,11 @@ func extractZip(archivePath, destDir string) (string, error) {
 
 	for _, f := range r.File {
 		target := filepath.Join(destDir, f.Name)
+
+		// Zip Slip 防护：确保解压路径在目标目录内
+		if absTarget, err := filepath.Abs(target); err != nil || !strings.HasPrefix(absTarget, destDir) {
+			continue // 跳过恶意路径
+		}
 
 		if f.FileInfo().IsDir() {
 			os.MkdirAll(target, 0755)
@@ -537,13 +564,19 @@ func findPlatformAsset(assets []GitHubAsset) (downloadURL, fileName string, size
 }
 
 // compareVersions 比较版本号 (返回: 1 if v1 > v2, -1 if v1 < v2, 0 if equal)
+// 支持格式: v1.2.3, v1.2.3-beta1, v1.2.3-rc.1
 func compareVersions(v1, v2 string) int {
 	// 移除 'v' 前缀
 	v1 = strings.TrimPrefix(v1, "v")
 	v2 = strings.TrimPrefix(v2, "v")
 
-	parts1 := strings.Split(v1, ".")
-	parts2 := strings.Split(v2, ".")
+	// 分离预发布标签 (如 1.2.3-beta1)
+	v1Base, v1Pre := splitPreRelease(v1)
+	v2Base, v2Pre := splitPreRelease(v2)
+
+	// 比较主版本号
+	parts1 := strings.Split(v1Base, ".")
+	parts2 := strings.Split(v2Base, ".")
 
 	maxLen := len(parts1)
 	if len(parts2) > maxLen {
@@ -567,7 +600,32 @@ func compareVersions(v1, v2 string) int {
 		}
 	}
 
+	// 版本号相同，比较预发布标签
+	// 正式版 > 预发布版 (无标签 > 有标签)
+	if v1Pre == "" && v2Pre != "" {
+		return 1
+	}
+	if v1Pre != "" && v2Pre == "" {
+		return -1
+	}
+	// 两个都有标签，按字典序比较
+	if v1Pre > v2Pre {
+		return 1
+	}
+	if v1Pre < v2Pre {
+		return -1
+	}
+
 	return 0
+}
+
+// splitPreRelease 分离版本号和预发布标签
+func splitPreRelease(version string) (base, preRelease string) {
+	idx := strings.IndexByte(version, '-')
+	if idx < 0 {
+		return version, ""
+	}
+	return version[:idx], version[idx+1:]
 }
 
 // setStatus 设置更新状态

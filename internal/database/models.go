@@ -170,7 +170,7 @@ type Domain struct {
 
 	Name           string `json:"name" gorm:"uniqueIndex"` // example.com
 	DKIMSelector   string `json:"dkim_selector"`           // default
-	DKIMPrivateKey string `json:"dkim_private_key"`        // PEM format
+	DKIMPrivateKey string `json:"-"`                        // PEM format (不返回给前端)
 	DKIMPublicKey  string `json:"dkim_public_key"`         // PEM format
 
 	// 高级配置
