@@ -11,34 +11,34 @@ import (
 	"sync"
 )
 
-const Version = "v1.3.2"
+const Version = "v1.3.3"
 
 type Config struct {
 	Domain         string `json:"domain"`
 	DKIMSelector   string `json:"dkim_selector"`
 	DKIMPrivateKey string `json:"dkim_private_key"`
-	
+
 	// Web Server Config
-	Host           string `json:"host"`            // 监听地址，默认 0.0.0.0
-	Port           string `json:"port"`            // 监听端口
-	BaseURL        string `json:"base_url"`        // 公网访问地址 (用于生成追踪链接)
-	EnableSSL      bool   `json:"enable_ssl"`      // 是否开启 HTTPS
-	CertFile       string `json:"cert_file"`       // 证书文件路径
-	KeyFile        string `json:"key_file"`        // 私钥文件路径
+	Host      string `json:"host"`       // 监听地址，默认 0.0.0.0
+	Port      string `json:"port"`       // 监听端口
+	BaseURL   string `json:"base_url"`   // 公网访问地址 (用于生成追踪链接)
+	EnableSSL bool   `json:"enable_ssl"` // 是否开启 HTTPS
+	CertFile  string `json:"cert_file"`  // 证书文件路径
+	KeyFile   string `json:"key_file"`   // 私钥文件路径
 
 	// SMTP Receiver Config (邮件接收服务)
-	EnableReceiver bool   `json:"enable_receiver"` // 是否启用接收服务
-	ReceiverPort   string `json:"receiver_port"`   // SMTP 接收端口，默认 25
-	ReceiverTLS    bool   `json:"receiver_tls"`    // 是否启用 STARTTLS
+	EnableReceiver  bool   `json:"enable_receiver"`   // 是否启用接收服务
+	ReceiverPort    string `json:"receiver_port"`     // SMTP 接收端口，默认 25
+	ReceiverTLS     bool   `json:"receiver_tls"`      // 是否启用 STARTTLS
 	ReceiverTLSCert string `json:"receiver_tls_cert"` // STARTTLS 证书路径
 	ReceiverTLSKey  string `json:"receiver_tls_key"`  // STARTTLS 私钥路径
 
 	// 收件安全配置
-	ReceiverRateLimit    int  `json:"receiver_rate_limit"`     // 每 IP 每分钟最大连接数，0 表示不限制
-	ReceiverMaxMsgSize   int  `json:"receiver_max_msg_size"`   // 最大邮件大小 (KB)，默认 10240 (10MB)
-	ReceiverSpamFilter   bool `json:"receiver_spam_filter"`    // 是否启用垃圾邮件过滤
-	ReceiverBlacklist    string `json:"receiver_blacklist"`    // IP 黑名单，逗号分隔
-	ReceiverRequireTLS   bool `json:"receiver_require_tls"`    // 是否强制要求 TLS
+	ReceiverRateLimit  int    `json:"receiver_rate_limit"`   // 每 IP 每分钟最大连接数，0 表示不限制
+	ReceiverMaxMsgSize int    `json:"receiver_max_msg_size"` // 最大邮件大小 (KB)，默认 10240 (10MB)
+	ReceiverSpamFilter bool   `json:"receiver_spam_filter"`  // 是否启用垃圾邮件过滤
+	ReceiverBlacklist  string `json:"receiver_blacklist"`    // IP 黑名单，逗号分隔
+	ReceiverRequireTLS bool   `json:"receiver_require_tls"`  // 是否强制要求 TLS
 
 	// 数据清理配置
 	CleanupEnabled      bool `json:"cleanup_enabled"`        // 是否启用自动清理
@@ -53,12 +53,12 @@ type Config struct {
 	AutoUpdateInterval int    `json:"auto_update_interval"` // 检查间隔（小时），默认 24
 	AutoUpdateTime     string `json:"auto_update_time"`     // 自动更新执行时间，如 "03:00"
 
-	JWTSecret      string `json:"jwt_secret"`
+	JWTSecret string `json:"jwt_secret"`
 }
 
 var (
-	AppConfig  Config
-	ConfigMu   sync.RWMutex // 保护 AppConfig 的并发读写
+	AppConfig Config
+	ConfigMu  sync.RWMutex // 保护 AppConfig 的并发读写
 )
 
 func LoadConfig() {

@@ -1087,6 +1087,16 @@ func GetConfigHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, safeCfg)
 }
 
+// HealthHandler 健康检查 (公开接口，无需认证)
+// 用于重启后前端轮询检测服务是否存活
+func HealthHandler(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"status":  "ok",
+		"version": config.Version,
+		"time":    time.Now().Unix(),
+	})
+}
+
 // GetVersionHandler 获取系统版本
 func GetVersionHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{

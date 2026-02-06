@@ -184,5 +184,15 @@
     "settings.toast.restore_failed": "Restore failed",
     "settings.toast.delete_failed": "Delete failed",
     "settings.toast.auto_update_saved": "Auto update config saved",
-    "settings.toast.save_failed": "Save failed"
+    "settings.toast.save_failed": "Save failed",
+    "settings.restart.title": "Restarting Service",
+    "settings.restart.waiting": "Waiting for service to restart...",
+    "settings.restart.checking": "Checking service status...",
+    "settings.restart.success": "Service restarted successfully! Refreshing page...",
+    "settings.restart.failed": "Service restart timed out. Manual intervention may be required.",
+    "settings.restart.failed_hint": "Please check server logs or restart the program manually.",
+    "settings.restart.hint": "Please do not close this page. Checking service status automatically...",
+    "settings.restart.retry": "Retry Check",
+    "settings.restart.close": "Close",
+    "settings.restart.manual_hint": "Linux: systemctl restart goemail | Windows: Re-run goemail.exe"
 }

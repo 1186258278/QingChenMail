@@ -184,5 +184,15 @@
     "settings.toast.restore_failed": "恢复失败",
     "settings.toast.delete_failed": "删除失败",
     "settings.toast.auto_update_saved": "自动更新配置已保存",
-    "settings.toast.save_failed": "保存失败"
+    "settings.toast.save_failed": "保存失败",
+    "settings.restart.title": "正在重启服务",
+    "settings.restart.waiting": "等待服务重新启动...",
+    "settings.restart.checking": "正在检测服务状态...",
+    "settings.restart.success": "服务已成功重启！正在刷新页面...",
+    "settings.restart.failed": "服务重启超时，可能需要手动干预。",
+    "settings.restart.failed_hint": "请检查服务器日志或手动重启程序。",
+    "settings.restart.hint": "请勿关闭此页面，正在自动检测服务状态...",
+    "settings.restart.retry": "重新检测",
+    "settings.restart.close": "关闭",
+    "settings.restart.manual_hint": "Linux: systemctl restart goemail | Windows: 重新运行 goemail.exe"
 }

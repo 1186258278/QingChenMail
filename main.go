@@ -139,6 +139,9 @@ func main() {
 		// TOTP 两步验证 (公开接口，用于登录时验证)
 		apiGroup.POST("/totp/verify", api.RateLimitMiddleware(api.GetLoginLimiter()), api.TOTPVerifyHandler)
 
+		// 健康检查 (公开，用于重启后前端轮询检测服务存活)
+		apiGroup.GET("/health", api.HealthHandler)
+
 		// 追踪接口 (公开)
 		apiGroup.GET("/track/open/:id", api.TrackOpenHandler)
 		apiGroup.GET("/track/click/:id", api.TrackClickHandler)

@@ -1484,28 +1484,165 @@
             }
         }
 
-        // 重启服务
+        // 重启服务（带健康检查轮询）
         async function restartService() {
+            // 显示全屏重启遮罩
+            showRestartOverlay();
+
             try {
-                showToast(I18n.t('settings.toast.restarting') || '正在重启服务...', 'success');
-                
-                // 显示重启中状态
-                document.getElementById('update-status-text').textContent = I18n.t('settings.update.restarting') || '正在重启服务...';
-                document.getElementById('update-progress-bar').style.width = '100%';
-                
                 await request('/config/restart', { method: 'POST' });
-                
-                // 等待一段时间后刷新页面
-                setTimeout(() => {
-                    window.location.reload();
-                }, 3000);
             } catch (e) {
-                // 如果请求失败（可能是因为服务已经关闭），也尝试刷新
-                setTimeout(() => {
-                    window.location.reload();
-                }, 3000);
+                // 请求失败也正常 — 服务可能在响应前就退出了
+            }
+
+            // 等待服务关闭
+            await sleep(2000);
+            updateRestartStatus('waiting', I18n.t('settings.restart.waiting') || '等待服务重新启动...');
+
+            // 轮询健康检查接口，最多等 60 秒
+            const maxWait = 60;
+            const interval = 2;
+            let elapsed = 0;
+            let alive = false;
+
+            while (elapsed < maxWait) {
+                await sleep(interval * 1000);
+                elapsed += interval;
+
+                const progress = Math.min(95, Math.round((elapsed / maxWait) * 100));
+                updateRestartProgress(progress);
+                updateRestartStatus('waiting', (I18n.t('settings.restart.checking') || '正在检测服务状态...') + ` (${elapsed}s)`);
+
+                try {
+                    const res = await fetch(API_BASE + '/health', { signal: AbortSignal.timeout(3000) });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.status === 'ok') {
+                            alive = true;
+                            break;
+                        }
+                    }
+                } catch (_) {
+                    // 服务还没起来，继续轮询
+                }
+            }
+
+            if (alive) {
+                updateRestartProgress(100);
+                updateRestartStatus('success', I18n.t('settings.restart.success') || '服务已成功重启！正在刷新页面...');
+                await sleep(1500);
+                window.location.reload();
+            } else {
+                updateRestartStatus('failed', I18n.t('settings.restart.failed') || '服务重启超时，可能需要手动干预。');
+                updateRestartActions(true);
             }
         }
+
+        // --- 重启遮罩 UI ---
+        function showRestartOverlay() {
+            // 如果已存在则移除
+            const old = document.getElementById('restart-overlay');
+            if (old) old.remove();
+
+            const overlay = document.createElement('div');
+            overlay.id = 'restart-overlay';
+            overlay.className = 'fixed inset-0 bg-gray-900/80 backdrop-blur-sm z-[200] flex items-center justify-center';
+            overlay.innerHTML = `
+                <div class="bg-white rounded-2xl shadow-2xl p-8 w-[480px] mx-4 text-center">
+                    <div id="restart-icon" class="mx-auto mb-5">
+                        <svg class="w-16 h-16 mx-auto text-blue-500 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </div>
+                    <h3 id="restart-title" class="text-xl font-bold text-gray-800 mb-2">${I18n.t('settings.restart.title') || '正在重启服务'}</h3>
+                    <p id="restart-msg" class="text-gray-500 text-sm mb-6">${I18n.t('settings.restart.waiting') || '等待服务重新启动...'}</p>
+                    <div class="w-full bg-gray-200 rounded-full h-2 mb-4">
+                        <div id="restart-progress" class="bg-blue-500 h-2 rounded-full transition-all duration-500" style="width: 5%"></div>
+                    </div>
+                    <p id="restart-hint" class="text-xs text-gray-400">${I18n.t('settings.restart.hint') || '请勿关闭此页面，正在自动检测服务状态...'}</p>
+                    <div id="restart-actions" class="mt-5 hidden space-y-3">
+                        <button onclick="retryRestartCheck()" class="w-full px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium text-sm">
+                            ${I18n.t('settings.restart.retry') || '重新检测'}
+                        </button>
+                        <button onclick="closeRestartOverlay()" class="w-full px-4 py-2.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition font-medium text-sm">
+                            ${I18n.t('settings.restart.close') || '关闭'}
+                        </button>
+                        <p class="text-xs text-gray-400 mt-2">${I18n.t('settings.restart.manual_hint') || 'Linux: systemctl restart goemail | Windows: 重新运行 goemail.exe'}</p>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+        }
+
+        function updateRestartStatus(type, msg) {
+            const msgEl = document.getElementById('restart-msg');
+            const iconEl = document.getElementById('restart-icon');
+            const hintEl = document.getElementById('restart-hint');
+            const progressBar = document.getElementById('restart-progress');
+            if (msgEl) msgEl.textContent = msg;
+
+            if (type === 'success') {
+                if (iconEl) iconEl.innerHTML = '<svg class="w-16 h-16 mx-auto text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+                if (progressBar) progressBar.className = 'bg-green-500 h-2 rounded-full transition-all duration-500';
+                if (hintEl) hintEl.textContent = '';
+            } else if (type === 'failed') {
+                if (iconEl) iconEl.innerHTML = '<svg class="w-16 h-16 mx-auto text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>';
+                if (progressBar) progressBar.className = 'bg-red-500 h-2 rounded-full transition-all duration-500';
+                if (hintEl) hintEl.textContent = I18n.t('settings.restart.failed_hint') || '请检查服务器日志或手动重启程序。';
+            }
+        }
+
+        function updateRestartProgress(pct) {
+            const bar = document.getElementById('restart-progress');
+            if (bar) bar.style.width = pct + '%';
+        }
+
+        function updateRestartActions(show) {
+            const el = document.getElementById('restart-actions');
+            if (el) el.classList.toggle('hidden', !show);
+        }
+
+        function closeRestartOverlay() {
+            const el = document.getElementById('restart-overlay');
+            if (el) el.remove();
+        }
+
+        async function retryRestartCheck() {
+            updateRestartActions(false);
+            updateRestartStatus('waiting', I18n.t('settings.restart.checking') || '正在检测服务状态...');
+            updateRestartProgress(10);
+
+            const maxWait = 30;
+            const interval = 2;
+            let elapsed = 0;
+
+            while (elapsed < maxWait) {
+                await sleep(interval * 1000);
+                elapsed += interval;
+                updateRestartProgress(Math.min(95, Math.round((elapsed / maxWait) * 100)));
+                updateRestartStatus('waiting', (I18n.t('settings.restart.checking') || '正在检测服务状态...') + ` (${elapsed}s)`);
+
+                try {
+                    const res = await fetch(API_BASE + '/health', { signal: AbortSignal.timeout(3000) });
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.status === 'ok') {
+                            updateRestartProgress(100);
+                            updateRestartStatus('success', I18n.t('settings.restart.success') || '服务已成功重启！正在刷新页面...');
+                            await sleep(1500);
+                            window.location.reload();
+                            return;
+                        }
+                    }
+                } catch (_) {}
+            }
+
+            updateRestartStatus('failed', I18n.t('settings.restart.failed') || '服务重启超时，可能需要手动干预。');
+            updateRestartActions(true);
+        }
+
+        function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
         // --- 备份管理相关函数 ---
         async function loadBackupList() {
