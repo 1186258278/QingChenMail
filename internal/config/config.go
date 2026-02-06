@@ -11,7 +11,7 @@ import (
 	"sync"
 )
 
-const Version = "v1.3.0"
+const Version = "v1.3.1"
 
 type Config struct {
 	Domain         string `json:"domain"`

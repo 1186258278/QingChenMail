@@ -183,12 +183,75 @@ curl -X POST <span id="curl-url-att">http://localhost:9901/api/v1/send</span> \
   }'
             </div>
 
-            <h4 class="font-bold text-gray-800 mb-3 text-sm uppercase tracking-wider" data-i18n="api.example.resp_async">响应示例 (异步)</h4>
-            <div class="code-block">
+            <h4 class="font-bold text-gray-800 mb-3 text-sm uppercase tracking-wider" data-i18n="api.example.resp_async">响应示例 (异步入队成功 - HTTP 202)</h4>
+            <div class="code-block mb-6">
 {
-  <span class="key">"message"</span>: "Email queued successfully",
+  <span class="key">"message"</span>: <span class="token">"Email queued successfully"</span>,
   <span class="key">"queue_id"</span>: 1024
 }
+            </div>
+
+            <h4 class="font-bold text-gray-800 mb-3 text-sm uppercase tracking-wider" data-i18n="api.example.resp_error_title">错误响应格式</h4>
+            <div class="code-block mb-6">
+<span class="keyword">// HTTP 400 - 请求参数错误</span>
+{ <span class="key">"error"</span>: <span class="token">"Template not found"</span> }
+
+<span class="keyword">// HTTP 401 - 认证失败</span>
+{ <span class="key">"error"</span>: <span class="token">"Invalid token or API key"</span> }
+
+<span class="keyword">// HTTP 403 - 权限不足</span>
+{ <span class="key">"error"</span>: <span class="token">"API Key does not have permission to access this endpoint"</span> }
+
+<span class="keyword">// HTTP 429 - 频率超限</span>
+{ <span class="key">"error"</span>: <span class="token">"Too many requests, please try again later"</span> }
+
+<span class="keyword">// HTTP 500 - 服务器错误</span>
+{ <span class="key">"error"</span>: <span class="token">"Failed to queue email: ..."</span> }
+            </div>
+
+            <h4 class="font-bold text-gray-800 mb-3 text-sm uppercase tracking-wider" data-i18n="api.example.status_codes_title">HTTP 状态码说明</h4>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left text-gray-600 border rounded-lg">
+                    <thead class="bg-gray-50 text-gray-700 font-bold">
+                        <tr>
+                            <th class="px-4 py-2 border-b">状态码</th>
+                            <th class="px-4 py-2 border-b">含义</th>
+                            <th class="px-4 py-2 border-b">处理建议</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        <tr>
+                            <td class="px-4 py-2"><span class="bg-green-100 text-green-800 px-2 py-0.5 rounded font-mono text-xs">202</span></td>
+                            <td class="px-4 py-2">邮件已加入发送队列</td>
+                            <td class="px-4 py-2 text-gray-400">成功，无需处理</td>
+                        </tr>
+                        <tr>
+                            <td class="px-4 py-2"><span class="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded font-mono text-xs">400</span></td>
+                            <td class="px-4 py-2">请求参数错误</td>
+                            <td class="px-4 py-2 text-gray-400">检查必填字段和格式</td>
+                        </tr>
+                        <tr>
+                            <td class="px-4 py-2"><span class="bg-red-100 text-red-800 px-2 py-0.5 rounded font-mono text-xs">401</span></td>
+                            <td class="px-4 py-2">认证失败</td>
+                            <td class="px-4 py-2 text-gray-400">检查 API Key 或 Token 是否有效</td>
+                        </tr>
+                        <tr>
+                            <td class="px-4 py-2"><span class="bg-red-100 text-red-800 px-2 py-0.5 rounded font-mono text-xs">403</span></td>
+                            <td class="px-4 py-2">权限不足</td>
+                            <td class="px-4 py-2 text-gray-400">API Key 仅支持 /send、/stats、/files 接口</td>
+                        </tr>
+                        <tr>
+                            <td class="px-4 py-2"><span class="bg-orange-100 text-orange-800 px-2 py-0.5 rounded font-mono text-xs">429</span></td>
+                            <td class="px-4 py-2">请求频率超限</td>
+                            <td class="px-4 py-2 text-gray-400">实现指数退避重试 (建议最大间隔 60s)</td>
+                        </tr>
+                        <tr>
+                            <td class="px-4 py-2"><span class="bg-gray-100 text-gray-800 px-2 py-0.5 rounded font-mono text-xs">500</span></td>
+                            <td class="px-4 py-2">服务器内部错误</td>
+                            <td class="px-4 py-2 text-gray-400">稍后重试，持续出现请联系管理员</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
