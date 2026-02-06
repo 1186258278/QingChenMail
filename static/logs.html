@@ -107,12 +107,15 @@
             } catch (e) {}
         }
 
-        function showDetail(id) {
+        async function showDetail(id) {
             currentLogId = id;
             const log = logList.find(item => item.id === id);
             if (!log) return;
 
+            // 先打开抽屉，显示基本信息 + 正文加载中
             const content = document.getElementById('detail-content');
+            document.getElementById('detail-drawer').classList.remove('translate-x-full');
+            document.getElementById('drawer-overlay').classList.remove('hidden');
 
             const errorSection = log.status !== 'success' ? `
                 <div class="bg-red-50 border-l-4 border-red-500 p-4 rounded mb-6">
@@ -126,16 +129,6 @@
                         </div>
                     </div>
                 </div>` : '';
-
-            let bodyDisplay = `<span class="text-gray-400 italic" data-i18n="logs.drawer.no_content">无内容</span>`;
-            if (log.body) {
-                bodyDisplay = `<iframe class="w-full h-64 border rounded bg-gray-50" srcdoc="${Utils.escapeHtml(log.body).replace(/"/g, '"')}"></iframe>`;
-                if (log.body.includes('<') && log.body.includes('>')) {
-                     bodyDisplay = `<div class="p-4 bg-gray-50 border rounded text-sm overflow-auto max-h-96">${log.body}</div>`; 
-                } else {
-                     bodyDisplay = `<div class="p-4 bg-gray-50 border rounded text-sm font-mono whitespace-pre-wrap">${Utils.escapeHtml(log.body)}</div>`;
-                }
-            }
 
             content.innerHTML = `
                 ${errorSection}
@@ -161,14 +154,47 @@
 
                 <div>
                     <label class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2 block" data-i18n="logs.drawer.body">邮件内容</label>
-                    ${bodyDisplay}
+                    <div id="body-container" class="animate-pulse"><div class="h-32 bg-gray-100 rounded flex items-center justify-center text-gray-400 text-sm">${I18n.t('logs.drawer.loading') || '加载中...'}</div></div>
                 </div>
             `;
-            
             if (typeof I18n !== 'undefined' && I18n.isReady) I18n.render();
 
-            document.getElementById('detail-drawer').classList.remove('translate-x-full');
-            document.getElementById('drawer-overlay').classList.remove('hidden');
+            // 异步请求完整日志详情（含 body）
+            try {
+                const detail = await request('/logs/' + id);
+                // 更新 logList 中的 body，供重发使用
+                if (detail && detail.body) {
+                    log.body = detail.body;
+                }
+                renderBody(detail ? detail.body : '');
+            } catch (e) {
+                renderBody('');
+            }
+        }
+
+        function renderBody(body) {
+            const container = document.getElementById('body-container');
+            if (!container) return;
+
+            if (!body) {
+                container.innerHTML = `<span class="text-gray-400 italic" data-i18n="logs.drawer.no_content">无内容</span>`;
+            } else if (body.includes('<') && body.includes('>')) {
+                // HTML 邮件 — 使用 sandbox iframe 安全渲染
+                container.innerHTML = `<iframe class="w-full border rounded bg-white" style="min-height:200px" sandbox="allow-same-origin" srcdoc="${Utils.escapeHtml(body)}"></iframe>`;
+                // 自动调整 iframe 高度
+                const iframe = container.querySelector('iframe');
+                if (iframe) {
+                    iframe.onload = () => {
+                        try {
+                            const h = iframe.contentDocument.body.scrollHeight;
+                            iframe.style.height = Math.min(Math.max(h + 20, 200), 600) + 'px';
+                        } catch(_) {}
+                    };
+                }
+            } else {
+                container.innerHTML = `<div class="p-4 bg-gray-50 border rounded text-sm font-mono whitespace-pre-wrap">${Utils.escapeHtml(body)}</div>`;
+            }
+            if (typeof I18n !== 'undefined' && I18n.isReady) I18n.render();
         }
 
         function closeDrawer() {

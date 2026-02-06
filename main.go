@@ -156,35 +156,36 @@ func main() {
 
 			authorized.GET("/stats", api.StatsHandler)
 			authorized.GET("/logs", api.LogsHandler)
+			authorized.GET("/logs/:id", api.GetLogDetailHandler)
 			authorized.POST("/config/dkim", api.GenerateDKIMHandler)
 			authorized.GET("/config", api.GetConfigHandler)
-			authorized.GET("/config/version", api.GetVersionHandler) // 新增
-			authorized.GET("/config/check-update", api.CheckUpdateHandler) // 新增：版本检查代理
-			authorized.GET("/config/cached-update", api.GetCachedUpdateHandler) // 获取缓存的版本信息（快速）
-			authorized.GET("/config/update-info", api.GetUpdateInfoHandler)   // 获取更新详情
-			authorized.POST("/config/update", api.PerformUpdateHandler)       // 执行在线更新
-			authorized.GET("/config/update-status", api.GetUpdateStatusHandler) // 获取更新状态
-			authorized.POST("/config/restart", api.RestartHandler)             // 重启服务
-			authorized.GET("/config/auto-update", api.GetAutoUpdateConfigHandler)    // 获取自动更新配置
+			authorized.GET("/config/version", api.GetVersionHandler)                  // 新增
+			authorized.GET("/config/check-update", api.CheckUpdateHandler)            // 新增：版本检查代理
+			authorized.GET("/config/cached-update", api.GetCachedUpdateHandler)       // 获取缓存的版本信息（快速）
+			authorized.GET("/config/update-info", api.GetUpdateInfoHandler)           // 获取更新详情
+			authorized.POST("/config/update", api.PerformUpdateHandler)               // 执行在线更新
+			authorized.GET("/config/update-status", api.GetUpdateStatusHandler)       // 获取更新状态
+			authorized.POST("/config/restart", api.RestartHandler)                    // 重启服务
+			authorized.GET("/config/auto-update", api.GetAutoUpdateConfigHandler)     // 获取自动更新配置
 			authorized.POST("/config/auto-update", api.UpdateAutoUpdateConfigHandler) // 更新自动更新配置
 			authorized.POST("/config", api.UpdateConfigHandler)
 			authorized.POST("/config/test-port", api.TestPortHandler)
 			authorized.POST("/config/kill-process", api.KillProcessHandler) // 新增
 			authorized.POST("/password", api.ChangePasswordHandler)
 			authorized.GET("/backup", api.BackupHandler)
-			
+
 			// 备份管理
-			authorized.GET("/backups", api.ListBackupsHandler)          // 获取备份列表
-			authorized.POST("/backups", api.CreateBackupHandler)        // 创建备份
+			authorized.GET("/backups", api.ListBackupsHandler)                // 获取备份列表
+			authorized.POST("/backups", api.CreateBackupHandler)              // 创建备份
 			authorized.POST("/backups/:id/restore", api.RestoreBackupHandler) // 恢复备份
-			authorized.DELETE("/backups/:id", api.DeleteBackupHandler)  // 删除备份
+			authorized.DELETE("/backups/:id", api.DeleteBackupHandler)        // 删除备份
 
 			// 两步验证 (TOTP) 管理
 			authorized.GET("/totp/status", api.TOTPStatusHandler)
 			authorized.GET("/totp/setup", api.TOTPSetupHandler)
 			authorized.POST("/totp/enable", api.TOTPEnableHandler)
 			authorized.POST("/totp/disable", api.TOTPDisableHandler)
-			
+
 			// SMTP 管理
 			authorized.POST("/smtp", api.CreateSMTPHandler)
 			authorized.GET("/smtp", api.ListSMTPHandler)
@@ -217,12 +218,12 @@ func main() {
 			authorized.POST("/files/batch_delete", api.BatchDeleteFilesHandler)
 
 			// 转发规则管理
-			authorized.GET("/forward-rules", api.ListForwardRulesHandler)      // ?domain_id=xxx
-			authorized.POST("/forward-rules", api.CreateForwardRuleHandler)    // body: {domain_id, ...}
+			authorized.GET("/forward-rules", api.ListForwardRulesHandler)   // ?domain_id=xxx
+			authorized.POST("/forward-rules", api.CreateForwardRuleHandler) // body: {domain_id, ...}
 			authorized.PUT("/forward-rules/:id", api.UpdateForwardRuleHandler)
 			authorized.DELETE("/forward-rules/:id", api.DeleteForwardRuleHandler)
 			authorized.POST("/forward-rules/:id/toggle", api.ToggleForwardRuleHandler)
-			
+
 			// 转发日志
 			authorized.GET("/forward-logs", api.ListForwardLogsHandler)
 			authorized.GET("/forward-stats", api.GetForwardStatsHandler)
@@ -302,7 +303,7 @@ func main() {
 		log.Fatal(err)
 	}
 	r.StaticFS("/dashboard", http.FS(staticFS))
-	
+
 	// 本地静态文件 (壁纸缓存)
 	// 挂载到 /wallpapers 路径，避免与 /dashboard 通配符冲突
 	r.Static("/wallpapers", "./static/wallpapers")
@@ -326,7 +327,7 @@ func main() {
 
 	// 6. 启动版本缓存更新（每60分钟检测一次，用于全局版本提示）
 	api.StartVersionCacheUpdater()
-	
+
 	// 7. 启动自动更新检测
 	api.StartAutoUpdateChecker()
 
@@ -340,9 +341,9 @@ func main() {
 		host = "0.0.0.0"
 	}
 	addr := fmt.Sprintf("%s:%s", host, port)
-	
+
 	fmt.Printf("QingChen Mail server starting on %s...\n", addr)
-	
+
 	// 使用 http.Server 实现优雅关闭
 	srv := &http.Server{
 		Addr:    addr,

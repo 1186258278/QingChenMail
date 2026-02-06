@@ -249,9 +249,9 @@ func AuthMiddleware() gin.HandlerFunc {
 				// 权限限制：API Key 仅用于发送邮件和获取统计，禁止管理操作
 				// 简单的基于路径的权限控制
 				path := c.Request.URL.Path
-				allowed := strings.HasPrefix(path, "/api/v1/send") || 
-						   strings.HasPrefix(path, "/api/v1/stats") ||
-						   strings.HasPrefix(path, "/api/v1/files") // 允许上传附件
+				allowed := strings.HasPrefix(path, "/api/v1/send") ||
+					strings.HasPrefix(path, "/api/v1/stats") ||
+					strings.HasPrefix(path, "/api/v1/files") // 允许上传附件
 
 				if !allowed {
 					c.JSON(http.StatusForbidden, gin.H{"error": "API Key does not have permission to access this endpoint"})
@@ -462,7 +462,7 @@ func CreateSMTPHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	// 如果设为默认，先取消其他默认
 	if smtp.IsDefault {
 		database.DB.Model(&database.SMTPConfig{}).Where("is_default = ?", true).Update("is_default", false)
@@ -530,14 +530,14 @@ func UpdateSMTPHandler(c *gin.Context) {
 func ListSMTPHandler(c *gin.Context) {
 	smtps := []database.SMTPConfig{}
 	database.DB.Order("is_default desc, id asc").Find(&smtps)
-	
+
 	// 脱敏密码
 	for i := range smtps {
 		if smtps[i].Password != "" {
 			smtps[i].Password = "******"
 		}
 	}
-	
+
 	c.JSON(http.StatusOK, smtps)
 }
 
@@ -620,15 +620,15 @@ func ListDomainHandler(c *gin.Context) {
 	domains := []database.Domain{}
 	// 预加载关联的证书信息，以便前端展示证书状态
 	database.DB.Preload("Certificate").Find(&domains)
-	
+
 	// 构建响应，添加证书状态摘要信息
 	type DomainWithCertStatus struct {
 		database.Domain
-		CertStatus   string `json:"cert_status"`   // valid, warning, critical, expired, none
+		CertStatus   string `json:"cert_status"`    // valid, warning, critical, expired, none
 		CertDaysLeft int    `json:"cert_days_left"` // 剩余天数，-1 表示无证书
 		CertDomains  string `json:"cert_domains"`   // 证书包含的域名
 	}
-	
+
 	result := make([]DomainWithCertStatus, len(domains))
 	for i, d := range domains {
 		result[i] = DomainWithCertStatus{
@@ -636,12 +636,12 @@ func ListDomainHandler(c *gin.Context) {
 			CertStatus:   "none",
 			CertDaysLeft: -1,
 		}
-		
+
 		if d.Certificate != nil {
 			result[i].CertDomains = d.Certificate.Domains
 			daysLeft := int(time.Until(d.Certificate.NotAfter).Hours() / 24)
 			result[i].CertDaysLeft = daysLeft
-			
+
 			switch {
 			case daysLeft < 0:
 				result[i].CertStatus = "expired"
@@ -654,7 +654,7 @@ func ListDomainHandler(c *gin.Context) {
 			}
 		}
 	}
-	
+
 	c.JSON(http.StatusOK, result)
 }
 
@@ -934,8 +934,8 @@ func SendHandler(c *gin.Context) {
 				fileData, err = base64.StdEncoding.DecodeString(att.Content)
 			} else if att.URL != "" {
 				sourceType = "api_url"
-			// 安全修复：SSRF 防护，检查是否为内网 URL
-			if security.IsInternalURL(att.URL) {
+				// 安全修复：SSRF 防护，检查是否为内网 URL
+				if security.IsInternalURL(att.URL) {
 					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Attachment URL %s is blocked (internal network)", att.Filename)})
 					return
 				}
@@ -1050,6 +1050,19 @@ func LogsHandler(c *gin.Context) {
 	})
 }
 
+// GetLogDetailHandler 获取单条日志详情（含 Body）
+func GetLogDetailHandler(c *gin.Context) {
+	id := c.Param("id")
+
+	var log database.EmailLog
+	if err := database.DB.First(&log, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "日志不存在"})
+		return
+	}
+
+	c.JSON(http.StatusOK, log)
+}
+
 // GenerateDKIMHandler 生成新的 DKIM 密钥
 func GenerateDKIMHandler(c *gin.Context) {
 	// 兼容旧接口，建议使用 Domain Management
@@ -1060,30 +1073,30 @@ func GenerateDKIMHandler(c *gin.Context) {
 func GetConfigHandler(c *gin.Context) {
 	// 返回配置时隐藏敏感信息
 	cfg := config.AppConfig
-	
+
 	// 脱敏处理
 	safeCfg := map[string]interface{}{
-		"domain":            cfg.Domain,
-		"dkim_selector":     cfg.DKIMSelector,
-		"dkim_private_key":  "****** (Hidden)", // 隐藏私钥
-		"host":              cfg.Host,
-		"port":              cfg.Port,
-		"base_url":          cfg.BaseURL,
-		"enable_ssl":        cfg.EnableSSL,
-		"cert_file":         cfg.CertFile,
-		"key_file":          cfg.KeyFile,
-		"enable_receiver":   cfg.EnableReceiver,
-		"receiver_port":     cfg.ReceiverPort,
-		"receiver_tls":      cfg.ReceiverTLS,
-		"receiver_tls_cert": cfg.ReceiverTLSCert,
-		"receiver_tls_key":  cfg.ReceiverTLSKey,
-		"receiver_rate_limit":    cfg.ReceiverRateLimit,
-		"receiver_max_msg_size":  cfg.ReceiverMaxMsgSize,
-		"receiver_blacklist":     cfg.ReceiverBlacklist,
-		"receiver_require_tls":   cfg.ReceiverRequireTLS,
-		"jwt_secret":        "****** (Hidden)", // 隐藏 JWT Secret
+		"domain":                cfg.Domain,
+		"dkim_selector":         cfg.DKIMSelector,
+		"dkim_private_key":      "****** (Hidden)", // 隐藏私钥
+		"host":                  cfg.Host,
+		"port":                  cfg.Port,
+		"base_url":              cfg.BaseURL,
+		"enable_ssl":            cfg.EnableSSL,
+		"cert_file":             cfg.CertFile,
+		"key_file":              cfg.KeyFile,
+		"enable_receiver":       cfg.EnableReceiver,
+		"receiver_port":         cfg.ReceiverPort,
+		"receiver_tls":          cfg.ReceiverTLS,
+		"receiver_tls_cert":     cfg.ReceiverTLSCert,
+		"receiver_tls_key":      cfg.ReceiverTLSKey,
+		"receiver_rate_limit":   cfg.ReceiverRateLimit,
+		"receiver_max_msg_size": cfg.ReceiverMaxMsgSize,
+		"receiver_blacklist":    cfg.ReceiverBlacklist,
+		"receiver_require_tls":  cfg.ReceiverRequireTLS,
+		"jwt_secret":            "****** (Hidden)", // 隐藏 JWT Secret
 	}
-	
+
 	c.JSON(http.StatusOK, safeCfg)
 }
 
@@ -1133,7 +1146,7 @@ func UpdateConfigHandler(c *gin.Context) {
 	if newConfig.DKIMPrivateKey == "" || strings.Contains(newConfig.DKIMPrivateKey, "Hidden") || strings.HasPrefix(newConfig.DKIMPrivateKey, "***") {
 		newConfig.DKIMPrivateKey = config.AppConfig.DKIMPrivateKey
 	}
-	
+
 	// JWT Secret 处理：支持重置
 	// 注意：前端返回的是 "****** (Hidden)"，需要特殊处理
 	if newConfig.JWTSecret == "RESET" {
@@ -1190,7 +1203,7 @@ func UpdateConfigHandler(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	msg := "Config updated"
 	if newConfig.JWTSecret != oldSecret {
 		msg = "Config updated & Token reset"
@@ -1280,7 +1293,7 @@ func CaptchaHandler(c *gin.Context) {
 	// 将字节转换为 uint16 (0-65535)，然后取模 10000
 	num := (int(b[0])<<8 | int(b[1])) % 10000
 	code := fmt.Sprintf("%04d", num)
-	
+
 	id := generateRandomKey() // 复用随机字符串生成
 
 	captchaMutex.Lock()
@@ -1314,7 +1327,7 @@ func CaptchaHandler(c *gin.Context) {
 	// 生成增强版 SVG (带干扰线和噪点)
 	width, height := 120, 40
 	svgContent := fmt.Sprintf(`<rect width="100%%" height="100%%" fill="#f8fafc"/>`)
-	
+
 	// 添加噪点
 	for i := 0; i < 20; i++ {
 		x := mathrand.Intn(width)
@@ -1387,7 +1400,7 @@ func WallpaperHandler(c *gin.Context) {
 	}
 
 	bingURL := "https://www.bing.com" + bingData.Images[0].Url
-	
+
 	// 下载图片
 	imgResp, err := http.Get(bingURL)
 	if err != nil {
@@ -1547,7 +1560,7 @@ func CreateForwardRuleHandler(c *gin.Context) {
 // UpdateForwardRuleHandler 更新转发规则
 func UpdateForwardRuleHandler(c *gin.Context) {
 	id := c.Param("id")
-	
+
 	var rule database.ForwardRule
 	if err := database.DB.First(&rule, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
@@ -1601,7 +1614,7 @@ func DeleteForwardRuleHandler(c *gin.Context) {
 // ToggleForwardRuleHandler 启用/禁用转发规则
 func ToggleForwardRuleHandler(c *gin.Context) {
 	id := c.Param("id")
-	
+
 	var rule database.ForwardRule
 	if err := database.DB.First(&rule, id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Rule not found"})
@@ -1647,7 +1660,7 @@ func GetForwardStatsHandler(c *gin.Context) {
 	database.DB.Model(&database.ForwardLog{}).Count(&totalCount)
 	database.DB.Model(&database.ForwardLog{}).Where("status = ?", "success").Count(&successCount)
 	database.DB.Model(&database.ForwardLog{}).Where("status = ?", "failed").Count(&failCount)
-	
+
 	startOfDay := time.Now().Truncate(24 * time.Hour)
 	database.DB.Model(&database.ForwardLog{}).Where("created_at >= ?", startOfDay).Count(&todayCount)
 
@@ -1720,7 +1733,7 @@ func getProcessInfo(port string) string {
 				fields := strings.Fields(line)
 				if len(fields) > 0 {
 					pid := fields[len(fields)-1]
-					
+
 					// 使用 tasklist 但不拼接 PID
 					pCmd := exec.Command("tasklist", "/FI", "PID eq "+pid, "/FO", "CSV", "/NH")
 					pOut, _ := pCmd.Output()

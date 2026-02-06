@@ -15,6 +15,7 @@
     "logs.drawer.resend_btn": "Resend Email",
     "logs.drawer.error_title": "Error Reason",
     "logs.drawer.no_content": "No content",
+    "logs.drawer.loading": "Loading email content...",
     "logs.drawer.id": "ID",
     "logs.drawer.time": "Sent Time",
     "logs.drawer.recipient": "Recipient",

@@ -15,6 +15,7 @@
     "logs.drawer.resend_btn": "重新发送",
     "logs.drawer.error_title": "发送失败原因",
     "logs.drawer.no_content": "无内容",
+    "logs.drawer.loading": "正在加载邮件内容...",
     "logs.drawer.id": "ID",
     "logs.drawer.time": "发送时间",
     "logs.drawer.recipient": "收件人",
