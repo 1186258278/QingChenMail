@@ -10,50 +10,63 @@ import (
 
 var (
 	schedulerOnce    sync.Once
+	stopOnce         sync.Once
 	schedulerStop    chan struct{}
 	schedulerRunning bool
 )
 
 // StartScheduler 启动证书检查调度器
-// 每天检查一次证书到期情况，并记录警告日志
+// 每天凌晨 4:00 检查一次证书到期情况，并记录警告日志
 func StartScheduler() {
 	schedulerOnce.Do(func() {
 		schedulerStop = make(chan struct{})
 		schedulerRunning = true
-		
+
 		go func() {
 			log.Println("[CertScheduler] 证书检查调度器已启动")
-			
+
 			// 启动时立即检查一次
 			checkCertificates()
-			
-			// 每天凌晨 4:00 检查
-			ticker := time.NewTicker(24 * time.Hour)
-			defer ticker.Stop()
-			
+
+			// 定点定时器：每天凌晨 4:00 检查
+			// (原实现用 24h Ticker + 小时窗口判断，若进程在 3-5 点之外启动则永不触发)
 			for {
+				nextRun := nextScheduleTime(4, 0)
+				timer := time.NewTimer(time.Until(nextRun))
+
 				select {
 				case <-schedulerStop:
+					timer.Stop()
 					log.Println("[CertScheduler] 调度器已停止")
 					schedulerRunning = false
 					return
-				case <-ticker.C:
-					// 检查是否是凌晨 4 点附近
-					now := time.Now()
-					if now.Hour() >= 3 && now.Hour() <= 5 {
-						checkCertificates()
-					}
+				case <-timer.C:
+					checkCertificates()
 				}
 			}
 		}()
 	})
 }
 
+// nextScheduleTime 计算下一个指定时间点 (本地时区)
+func nextScheduleTime(hour, minute int) time.Time {
+	now := time.Now()
+	next := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, now.Location())
+	if next.Before(now) {
+		next = next.Add(24 * time.Hour)
+	}
+	return next
+}
+
 // StopScheduler 停止调度器
 func StopScheduler() {
-	if schedulerRunning && schedulerStop != nil {
-		close(schedulerStop)
+	if schedulerStop == nil {
+		return
 	}
+	// stopOnce 防止对已关闭的 channel 再次 close 导致 panic
+	stopOnce.Do(func() {
+		close(schedulerStop)
+	})
 }
 
 // checkCertificates 检查所有证书的到期情况

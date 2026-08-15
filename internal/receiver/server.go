@@ -18,6 +18,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"goemail/internal/config"
@@ -46,13 +47,15 @@ type RateLimiter struct {
 	requests map[string][]time.Time
 	limit    int           // 每分钟最大请求数
 	window   time.Duration // 时间窗口
+	stop     chan struct{}
+	stopOnce sync.Once
 }
 
 var (
-	rateLimiter *RateLimiter
-	blacklistIPs map[string]bool
-	blacklistMu  sync.RWMutex
-	tlsConfig   *tls.Config
+	rateLimiterPtr atomic.Pointer[RateLimiter]
+	blacklistIPs   map[string]bool
+	blacklistMu    sync.RWMutex
+	tlsConfigPtr   atomic.Pointer[tls.Config]
 )
 
 // NewRateLimiter 创建速率限制器
@@ -61,15 +64,27 @@ func NewRateLimiter(limit int) *RateLimiter {
 		requests: make(map[string][]time.Time),
 		limit:    limit,
 		window:   time.Minute,
+		stop:     make(chan struct{}),
 	}
-	// 定期清理过期记录
+	// 定期清理过期记录 (可通过 Stop 取消，防止 ReloadConfig 反复创建导致 goroutine 泄漏)
 	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
 		for {
-			time.Sleep(time.Minute)
-			rl.cleanup()
+			select {
+			case <-rl.stop:
+				return
+			case <-ticker.C:
+				rl.cleanup()
+			}
 		}
 	}()
 	return rl
+}
+
+// Stop 停止速率限制器的后台清理 goroutine
+func (rl *RateLimiter) Stop() {
+	rl.stopOnce.Do(func() { close(rl.stop) })
 }
 
 // Allow 检查 IP 是否允许连接
@@ -195,14 +210,14 @@ func StartReceiver() {
 	}
 
 	// 初始化速率限制器
-	rateLimiter = NewRateLimiter(config.AppConfig.ReceiverRateLimit)
+	rateLimiterPtr.Store(NewRateLimiter(config.AppConfig.ReceiverRateLimit))
 
 	// 加载黑名单
 	updateBlacklist()
 
 	// 加载 TLS 配置
-	tlsConfig = loadTLSConfig()
-	if tlsConfig != nil {
+	tlsConfigPtr.Store(loadTLSConfig())
+	if tc := tlsConfigPtr.Load(); tc != nil {
 		log.Println("[Receiver] STARTTLS enabled")
 	}
 
@@ -248,7 +263,7 @@ func handleConnection(conn net.Conn) {
 	}
 
 	// 检查速率限制
-	if !rateLimiter.Allow(remoteIP) {
+	if rl := rateLimiterPtr.Load(); rl != nil && !rl.Allow(remoteIP) {
 		log.Printf("[Receiver] Rate limit exceeded for IP: %s", remoteIP)
 		conn.Write([]byte("421 Too many connections, try again later\r\n"))
 		return
@@ -276,14 +291,11 @@ func handleConnection(conn net.Conn) {
 			return
 		}
 
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		// 如果在 DATA 模式
+		// 如果在 DATA 模式：正文行只剥离行尾 \r\n，保留行内空白和空行，
+		// 避免破坏邮件正文字节 (影响 DKIM 校验与 quoted-printable 内容)
 		if session.inData {
-			if line == "." {
+			bodyLine := strings.TrimRight(line, "\r\n")
+			if bodyLine == "." {
 				// 数据结束，处理邮件
 				session.inData = false
 				if err := session.processEmail(); err != nil {
@@ -296,21 +308,29 @@ func handleConnection(conn net.Conn) {
 				session.to = make([]string, 0)
 				session.data.Reset()
 			} else {
-				// 检查邮件大小限制
+				// 检查邮件大小限制 (配置 <=0 时使用默认 10MB，防止关闭限制)
 				maxSize := config.AppConfig.ReceiverMaxMsgSize * 1024
-				if maxSize > 0 && session.data.Len()+len(line) > maxSize {
+				if maxSize <= 0 {
+					maxSize = 10240 * 1024
+				}
+				if session.data.Len()+len(bodyLine) > maxSize {
 					session.inData = false
 					session.send("552 Message size exceeds limit")
 					session.data.Reset()
 					continue
 				}
 				// 处理透明点 (dot stuffing)
-				if strings.HasPrefix(line, "..") {
-					line = line[1:]
+				if strings.HasPrefix(bodyLine, "..") {
+					bodyLine = bodyLine[1:]
 				}
-				session.data.WriteString(line)
+				session.data.WriteString(bodyLine)
 				session.data.WriteString("\r\n")
 			}
+			continue
+		}
+
+		line = strings.TrimSpace(line)
+		if line == "" {
 			continue
 		}
 
@@ -358,7 +378,7 @@ func (s *SMTPSession) handleHelo(line string) {
 		s.send("250-GoEmail")
 		s.send(fmt.Sprintf("250-SIZE %d", config.AppConfig.ReceiverMaxMsgSize*1024))
 		s.send("250-8BITMIME")
-		if tlsConfig != nil && !s.tlsEnabled {
+		if tc := tlsConfigPtr.Load(); tc != nil && !s.tlsEnabled {
 			s.send("250-STARTTLS")
 		}
 		s.send("250 OK")
@@ -368,7 +388,8 @@ func (s *SMTPSession) handleHelo(line string) {
 }
 
 func (s *SMTPSession) handleStartTLS() {
-	if tlsConfig == nil {
+	tc := tlsConfigPtr.Load()
+	if tc == nil {
 		s.send("454 TLS not available")
 		return
 	}
@@ -380,7 +401,7 @@ func (s *SMTPSession) handleStartTLS() {
 	s.send("220 Ready to start TLS")
 
 	// 升级到 TLS
-	tlsConn := tls.Server(s.conn, tlsConfig)
+	tlsConn := tls.Server(s.conn, tc)
 	if err := tlsConn.Handshake(); err != nil {
 		log.Printf("[Receiver] TLS handshake failed from %s: %v", s.remoteIP, err)
 		return
@@ -411,10 +432,18 @@ func (s *SMTPSession) handleMailFrom(line string) {
 		return
 	}
 	s.from = addr
+	// 新事务开始：清空上一事务的收件人，避免串事务 (RFC 5321)
+	s.to = make([]string, 0)
 	s.send("250 OK")
 }
 
 func (s *SMTPSession) handleRcptTo(line string) {
+	// 必须先执行 MAIL FROM (RFC 5321 事务顺序)
+	if s.from == "" {
+		s.send("503 Bad sequence of commands: MAIL FROM required first")
+		return
+	}
+
 	addr := extractEmail(line[8:])
 	if addr == "" {
 		s.send("501 Syntax error in RCPT TO")
@@ -650,8 +679,19 @@ func getCharset(contentType string) string {
 
 // parseMultipart 解析多部分邮件
 func parseMultipart(body, boundary string) (string, []ParsedAttachment) {
+	return parseMultipartDepth(body, boundary, 0)
+}
+
+// maxMultipartDepth 嵌套 multipart 最大递归深度，防止深层嵌套造成栈溢出/OOM (zip-bomb 类攻击)
+const maxMultipartDepth = 20
+
+func parseMultipartDepth(body, boundary string, depth int) (string, []ParsedAttachment) {
 	var textContent string
 	var attachments []ParsedAttachment
+
+	if depth > maxMultipartDepth {
+		return textContent, attachments
+	}
 
 	reader := multipart.NewReader(strings.NewReader(body), boundary)
 
@@ -683,10 +723,10 @@ func parseMultipart(body, boundary string) (string, []ParsedAttachment) {
 			charset := getCharset(contentType)
 			textContent += decodeCharset(string(decodedData), charset)
 		} else if strings.HasPrefix(strings.ToLower(contentType), "multipart/") {
-			// 嵌套多部分
+			// 嵌套多部分 (限制递归深度)
 			nestedBoundary := extractBoundary(contentType)
 			if nestedBoundary != "" {
-				nestedText, nestedAtts := parseMultipart(string(data), nestedBoundary)
+				nestedText, nestedAtts := parseMultipartDepth(string(data), nestedBoundary, depth+1)
 				textContent += nestedText
 				attachments = append(attachments, nestedAtts...)
 			}
@@ -924,9 +964,12 @@ func checkPortOccupancy(port string) {
 
 // ReloadConfig 重新加载配置（供外部调用）
 func ReloadConfig() {
-	rateLimiter = NewRateLimiter(config.AppConfig.ReceiverRateLimit)
+	// 停止旧的速率限制器后台 goroutine，防止泄漏
+	if old := rateLimiterPtr.Swap(NewRateLimiter(config.AppConfig.ReceiverRateLimit)); old != nil {
+		old.Stop()
+	}
 	updateBlacklist()
-	tlsConfig = loadTLSConfig()
+	tlsConfigPtr.Store(loadTLSConfig())
 	log.Println("[Receiver] Configuration reloaded")
 }
 

@@ -179,6 +179,17 @@ func ListContactsHandler(c *gin.Context) {
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	keyword := c.Query("keyword")
 
+	if page < 1 {
+		page = 1
+	}
+	// 限制分页大小，防止超大 page_size 一次性加载全部数据
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	if pageSize > 500 {
+		pageSize = 500
+	}
+
 	query := database.DB.Model(&database.Contact{})
 	if groupID != "" {
 		query = query.Where("group_id = ?", groupID)
@@ -371,7 +382,20 @@ func ExportContactsHandler(c *gin.Context) {
 		if strings.ContainsAny(name, ",\"\n") {
 			name = "\"" + strings.ReplaceAll(name, "\"", "\"\"") + "\""
 		}
-		builder.WriteString(fmt.Sprintf("%s,%s,%s\n", contact.Email, name, contact.Status))
+		email := contact.Email
+		if strings.ContainsAny(email, ",\"\n") {
+			email = "\"" + strings.ReplaceAll(email, "\"", "\"\"") + "\""
+		}
+		// CSV 公式注入防护：以 = + - @ 开头的单元格加单引号前缀
+		if strings.HasPrefix(email, "=") || strings.HasPrefix(email, "+") ||
+			strings.HasPrefix(email, "-") || strings.HasPrefix(email, "@") {
+			email = "'" + email
+		}
+		if strings.HasPrefix(name, "=") || strings.HasPrefix(name, "+") ||
+			strings.HasPrefix(name, "-") || strings.HasPrefix(name, "@") {
+			name = "'" + name
+		}
+		builder.WriteString(fmt.Sprintf("%s,%s,%s\n", email, name, contact.Status))
 	}
 
 	// 获取分组名称用于文件名

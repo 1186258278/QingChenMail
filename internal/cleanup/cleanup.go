@@ -127,8 +127,9 @@ func cleanEmailLogs(days int) int64 {
 
 	for {
 		// 使用子查询方式分批删除，兼容 SQLite
+		// 注意：使用 Unscoped() 查询，包含已被软删除的记录，确保物理清除
 		var ids []uint
-		database.DB.Model(&database.EmailLog{}).
+		database.DB.Unscoped().Model(&database.EmailLog{}).
 			Where("created_at < ?", cutoff).
 			Limit(1000).
 			Pluck("id", &ids)
@@ -155,7 +156,7 @@ func cleanInbox(days int) int64 {
 
 	for {
 		var ids []uint
-		database.DB.Model(&database.Inbox{}).
+		database.DB.Unscoped().Model(&database.Inbox{}).
 			Where("created_at < ?", cutoff).
 			Limit(1000).
 			Pluck("id", &ids)
@@ -199,7 +200,7 @@ func cleanQueue(days int) int64 {
 
 	for {
 		var ids []uint
-		database.DB.Model(&database.EmailQueue{}).
+		database.DB.Unscoped().Model(&database.EmailQueue{}).
 			Where("created_at < ? AND status IN ?", cutoff, []string{"completed", "failed", "dead"}).
 			Limit(1000).
 			Pluck("id", &ids)
@@ -226,7 +227,7 @@ func cleanForwardLogs(days int) int64 {
 
 	for {
 		var ids []uint
-		database.DB.Model(&database.ForwardLog{}).
+		database.DB.Unscoped().Model(&database.ForwardLog{}).
 			Where("created_at < ?", cutoff).
 			Limit(1000).
 			Pluck("id", &ids)
@@ -255,7 +256,7 @@ func cleanAttachments(days int) (int64, int64) {
 	// 分批处理附件
 	for {
 		var files []database.AttachmentFile
-		database.DB.Where("created_at < ?", cutoff).Limit(500).Find(&files)
+		database.DB.Unscoped().Where("created_at < ?", cutoff).Limit(500).Find(&files)
 
 		if len(files) == 0 {
 			break

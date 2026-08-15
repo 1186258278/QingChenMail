@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"goemail/internal/config"
+	"goemail/internal/database"
 
 	"github.com/gin-gonic/gin"
 )
@@ -73,11 +74,33 @@ func CreateBackupHandler(c *gin.Context) {
 	})
 }
 
+// validateBackupID 校验备份 ID 格式，防止路径遍历 (如 "."、"../backups2" 等)
+// 合法格式: backup-<version>-<timestamp>，只允许字母数字和 . _ -
+func validateBackupID(backupID string) bool {
+	if backupID == "" || backupID == "." || backupID == ".." {
+		return false
+	}
+	if strings.ContainsAny(backupID, "/\\") {
+		return false
+	}
+	for _, r := range backupID {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' ||
+			r == '-' || r == '_' || r == '.') {
+			return false
+		}
+	}
+	return true
+}
+
 // RestoreBackupHandler 恢复到指定备份
 func RestoreBackupHandler(c *gin.Context) {
 	backupID := c.Param("id")
 	if backupID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "备份 ID 不能为空"})
+		return
+	}
+	if !validateBackupID(backupID) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的备份 ID"})
 		return
 	}
 
@@ -89,7 +112,7 @@ func RestoreBackupHandler(c *gin.Context) {
 		return
 	}
 	absBackupDir, _ := filepath.Abs(backupDir)
-	if !strings.HasPrefix(absPath, absBackupDir) {
+	if absPath != absBackupDir && !strings.HasPrefix(absPath, absBackupDir+string(os.PathSeparator)) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的备份路径"})
 		return
 	}
@@ -170,6 +193,10 @@ func DeleteBackupHandler(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "备份 ID 不能为空"})
 		return
 	}
+	if !validateBackupID(backupID) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的备份 ID"})
+		return
+	}
 
 	// 安全检查：确保路径在备份目录内
 	backupPath := filepath.Join(backupDir, backupID)
@@ -179,7 +206,7 @@ func DeleteBackupHandler(c *gin.Context) {
 		return
 	}
 	absBackupDir, _ := filepath.Abs(backupDir)
-	if !strings.HasPrefix(absPath, absBackupDir) {
+	if absPath != absBackupDir && !strings.HasPrefix(absPath, absBackupDir+string(os.PathSeparator)) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的备份路径"})
 		return
 	}
@@ -220,6 +247,11 @@ func CreateBackup(version string, isAuto bool) (string, error) {
 
 	// 1. 备份数据库
 	if _, err := os.Stat("goemail.db"); err == nil {
+		// WAL 模式下数据可能仍在 -wal 文件中，先 checkpoint 落盘再复制，
+		// 否则备份可能丢失未合并的数据或产生不一致副本
+		if sqlDB, err := database.DB.DB(); err == nil {
+			sqlDB.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
+		}
 		if err := copyFile("goemail.db", filepath.Join(backupPath, "goemail.db")); err != nil {
 			return "", fmt.Errorf("备份数据库失败: %w", err)
 		}

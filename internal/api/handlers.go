@@ -37,6 +37,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 var (
@@ -541,6 +542,8 @@ func UpdateSMTPHandler(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	// 脱敏密码，避免把密文返回给前端
+	smtp.Password = "******"
 	c.JSON(http.StatusOK, smtp)
 }
 
@@ -878,6 +881,7 @@ func DeleteTemplateHandler(c *gin.Context) {
 
 // SendHandler 处理邮件发送请求
 func SendHandler(c *gin.Context) {
+	const MaxFileSizeForDownload = 10 * 1024 * 1024 // 附件远程下载大小上限
 	var req mailer.SendRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -956,11 +960,39 @@ func SendHandler(c *gin.Context) {
 					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Attachment URL %s is blocked (internal network)", att.Filename)})
 					return
 				}
-				client := &http.Client{Timeout: 30 * time.Second}
+				// 禁止自动重定向到内网：对每一跳重新做 SSRF 校验
+				client := &http.Client{
+					Timeout: 30 * time.Second,
+					CheckRedirect: func(req *http.Request, via []*http.Request) error {
+						if len(via) >= 5 {
+							return fmt.Errorf("too many redirects")
+						}
+						if security.IsInternalURL(req.URL.String()) {
+							return fmt.Errorf("redirect to internal network is blocked")
+						}
+						return nil
+					},
+				}
 				resp, err := client.Get(att.URL)
-				if err == nil {
-					defer resp.Body.Close()
-					fileData, err = io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024))
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Failed to download attachment %s: %v", att.Filename, err)})
+					return
+				}
+				if resp.StatusCode != http.StatusOK {
+					resp.Body.Close()
+					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Failed to download attachment %s: HTTP %d", att.Filename, resp.StatusCode)})
+					return
+				}
+				// 限制附件大小 (10MB)，多读 1 字节检测截断
+				fileData, err = io.ReadAll(io.LimitReader(resp.Body, MaxFileSizeForDownload+1))
+				resp.Body.Close()
+				if err != nil {
+					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Failed to download attachment %s: %v", att.Filename, err)})
+					return
+				}
+				if len(fileData) > MaxFileSizeForDownload {
+					c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Attachment %s exceeds limit (10MB)", att.Filename)})
+					return
 				}
 			}
 
@@ -978,7 +1010,8 @@ func SendHandler(c *gin.Context) {
 					ext = ".dat"
 				}
 				// 生成唯一文件名: timestamp_random.ext
-				newFilename := fmt.Sprintf("%d_%s%s", time.Now().UnixNano(), generateRandomKey()[:8], ext)
+				// generateRandomKey() 返回 "sk_live_" + 48位hex，取 [8:24] 的随机部分
+				newFilename := fmt.Sprintf("%d_%s%s", time.Now().UnixNano(), generateRandomKey()[8:24], ext)
 				localPath := filepath.Join(saveDir, newFilename)
 
 				if err := os.WriteFile(localPath, fileData, 0644); err == nil {
@@ -999,6 +1032,11 @@ func SendHandler(c *gin.Context) {
 				}
 			}
 		}
+	}
+
+	// 生成追踪 ID (用于打开/点击追踪与发送日志去重)
+	if req.TrackingID == "" {
+		req.TrackingID = uuid.New().String()
 	}
 
 	// 异步发送：只负责加入队列
@@ -1169,7 +1207,11 @@ func UpdateConfigHandler(c *gin.Context) {
 	if newConfig.JWTSecret == "RESET" {
 		b := make([]byte, 16)
 		rand.Read(b)
-		newConfig.JWTSecret = fmt.Sprintf("goemail-secret-%x", b)
+		newSecret := fmt.Sprintf("goemail-secret-%x", b)
+		// 轮换密钥前，用旧密钥解密并以新密钥重新加密 SMTP 密码和证书私钥，
+		// 否则已存储的加密凭据将永久无法解密
+		reencryptSensitiveData(newSecret)
+		newConfig.JWTSecret = newSecret
 	} else if newConfig.JWTSecret == "" || strings.Contains(newConfig.JWTSecret, "Hidden") || strings.HasPrefix(newConfig.JWTSecret, "***") {
 		// 如果前端传回空、包含 Hidden 或掩码，则保持原值不变
 		newConfig.JWTSecret = config.AppConfig.JWTSecret
@@ -1183,6 +1225,20 @@ func UpdateConfigHandler(c *gin.Context) {
 	if newConfig.Port == "" {
 		newConfig.Port = config.AppConfig.Port
 	}
+
+	// 3.5 保留由独立接口管理的配置字段
+	// 前端主设置表单 (settings.html) 不提交这些字段，而本接口采用整对象覆盖，
+	// 若不保留，保存任何主设置都会把自动清理/自动更新/垃圾邮件过滤配置静默清零
+	newConfig.ReceiverSpamFilter = config.AppConfig.ReceiverSpamFilter
+	newConfig.CleanupEnabled = config.AppConfig.CleanupEnabled
+	newConfig.CleanupEmailLogDays = config.AppConfig.CleanupEmailLogDays
+	newConfig.CleanupInboxDays = config.AppConfig.CleanupInboxDays
+	newConfig.CleanupQueueDays = config.AppConfig.CleanupQueueDays
+	newConfig.CleanupForwardDays = config.AppConfig.CleanupForwardDays
+	newConfig.CleanupAttachDays = config.AppConfig.CleanupAttachDays
+	newConfig.AutoUpdateEnabled = config.AppConfig.AutoUpdateEnabled
+	newConfig.AutoUpdateInterval = config.AppConfig.AutoUpdateInterval
+	newConfig.AutoUpdateTime = config.AppConfig.AutoUpdateTime
 
 	// 4. 端口可用性检测 (如果启用了接收服务且修改了端口)
 	if newConfig.EnableReceiver && (newConfig.ReceiverPort != config.AppConfig.ReceiverPort || !config.AppConfig.EnableReceiver) {
@@ -1226,6 +1282,34 @@ func UpdateConfigHandler(c *gin.Context) {
 		msg = "Config updated & Token reset"
 	}
 	c.JSON(http.StatusOK, gin.H{"message": msg})
+}
+
+// reencryptSensitiveData 在 JWT Secret 轮换时，用旧密钥解密并以新密钥重新加密
+// SMTP 密码和证书私钥，避免已存储的加密凭据永久失效
+func reencryptSensitiveData(newSecret string) {
+	oldSecret := config.AppConfig.JWTSecret
+
+	// 1. SMTP 通道密码
+	var smtps []database.SMTPConfig
+	if err := database.DB.Find(&smtps).Error; err == nil {
+		for i := range smtps {
+			if smtps[i].Password == "" {
+				continue
+			}
+			plain, err := crypto.Decrypt(smtps[i].Password, oldSecret)
+			if err != nil {
+				continue // 无法解密则保持原值 (兼容旧数据)
+			}
+			if enc, err := crypto.Encrypt(plain, newSecret); err == nil {
+				database.DB.Model(&database.SMTPConfig{}).Where("id = ?", smtps[i].ID).Update("password", enc)
+			}
+		}
+	}
+
+	// 2. 证书私钥与 DNS 配置
+	if certManager != nil {
+		certManager.Rekey(newSecret)
+	}
 }
 
 // --- API Key Management ---
@@ -1678,7 +1762,9 @@ func GetForwardStatsHandler(c *gin.Context) {
 	database.DB.Model(&database.ForwardLog{}).Where("status = ?", "success").Count(&successCount)
 	database.DB.Model(&database.ForwardLog{}).Where("status = ?", "failed").Count(&failCount)
 
-	startOfDay := time.Now().Truncate(24 * time.Hour)
+	// 今日转发数 (本地时区零点)
+	now := time.Now()
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	database.DB.Model(&database.ForwardLog{}).Where("created_at >= ?", startOfDay).Count(&todayCount)
 
 	c.JSON(http.StatusOK, gin.H{
@@ -1858,7 +1944,8 @@ func UpdateCleanupConfigHandler(c *gin.Context) {
 		return
 	}
 
-	// 更新配置
+	// 更新配置 (加锁保护，与读取方并发安全)
+	config.ConfigMu.Lock()
 	if req.CleanupEnabled != nil {
 		config.AppConfig.CleanupEnabled = *req.CleanupEnabled
 	}
@@ -1880,9 +1967,11 @@ func UpdateCleanupConfigHandler(c *gin.Context) {
 
 	// 保存配置
 	if err := config.SaveConfig(config.AppConfig); err != nil {
+		config.ConfigMu.Unlock()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	config.ConfigMu.Unlock()
 
 	c.JSON(http.StatusOK, gin.H{"message": "Cleanup config updated"})
 }

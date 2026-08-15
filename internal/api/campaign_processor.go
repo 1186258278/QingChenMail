@@ -27,9 +27,18 @@ const (
 
 // ProcessCampaign 执行营销任务的发送逻辑 (入队)
 func ProcessCampaign(campaign *database.Campaign) error {
-	if campaign.Status == "processing" || campaign.Status == "completed" {
+	// 原子抢占状态：防止并发请求 (双击 Start、调度器与手动同时触发) 导致重复入队
+	// 只有处于 draft/scheduled/failed 状态的任务才能迁移到 processing
+	result := database.DB.Model(&database.Campaign{}).
+		Where("id = ? AND status IN ('draft', 'scheduled', 'failed')", campaign.ID).
+		Update("status", "processing")
+	if result.Error != nil {
+		return fmt.Errorf("failed to claim campaign: %v", result.Error)
+	}
+	if result.RowsAffected == 0 {
 		return fmt.Errorf("campaign already processed")
 	}
+	campaign.Status = "processing"
 
 	// 1. 获取目标联系人
 	var contacts []database.Contact
@@ -56,9 +65,8 @@ func ProcessCampaign(campaign *database.Campaign) error {
 		return fmt.Errorf("invalid sender configuration")
 	}
 
-	// 3. 更新状态并批量创建队列任务
+	// 3. 更新统计快照
 	database.DB.Model(campaign).Updates(map[string]interface{}{
-		"status":      "processing",
 		"total_count": len(contacts),
 		"sent_count":  0,
 	})

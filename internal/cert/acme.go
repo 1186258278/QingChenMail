@@ -156,9 +156,17 @@ func (c *ACMEClient) InitChallenge(domain, email string, dnsProvider DNSProvider
 
 	// 5. 设置手动 DNS 提供商
 	var txtRecord, txtValue string
+	var txtValueMu sync.Mutex
+	presentCh := make(chan string, 1)
 	provider := NewManualDNSProvider(func(d, token string) {
+		txtValueMu.Lock()
 		txtRecord = "_acme-challenge." + d
 		txtValue = token
+		txtValueMu.Unlock()
+		select {
+		case presentCh <- token:
+		default:
+		}
 	})
 
 	if err := client.Challenge.SetDNS01Provider(provider); err != nil {
@@ -172,26 +180,34 @@ func (c *ACMEClient) InitChallenge(domain, email string, dnsProvider DNSProvider
 	}
 	user.Registration = reg
 
-	// 7. 获取挑战信息 (不真正申请证书，只获取挑战)
+	// 7. 触发真实挑战流程以获取正确的 DNS-01 TXT 值
+	// 正确的 TXT 值 = base64url(sha256(token + "." + 账户密钥指纹))，只能在真实挑战回调中拿到。
+	// 由于 DNS 尚未配置，Obtain 最终会失败退出 (lego 有内部超时)，但 Present 回调
+	// 会在挑战开始时同步触发，让我们通过 channel 拿到正确的 TXT 值。
 	request := certificate.ObtainRequest{
 		Domains: []string{domain},
 		Bundle:  true,
 	}
 
-	// 使用 ObtainForCSR 的预检模式获取挑战
-	// 注意：lego 的 Obtain 会直接完成整个流程，我们需要分步处理
-	// 这里使用一个技巧：调用 Present 但不完成验证
-	_ = provider.Present(domain, "", domain)
+	go func() {
+		_, _ = client.Certificate.Obtain(request)
+	}()
 
-	// 由于 lego 不直接支持分步验证，我们需要手动计算 TXT 值
-	// 使用域名作为临时 keyAuth 来触发 onPresent 回调
-	txtRecord = "_acme-challenge." + domain
-	// 真正的 TXT 值需要从实际的 ACME 挑战中获取
-	// 这里我们先保存请求信息，等用户添加 DNS 记录后再真正验证
-
-	// 为了获取真正的 TXT 值，我们需要先尝试获取证书
-	// 但这会导致验证失败（因为 DNS 记录还没添加）
-	// 所以我们改用直接调用 lego 的内部方法
+	// 等待 Present 回调 (有超时上限，不再依赖固定 sleep 竞态)
+	select {
+	case token := <-presentCh:
+		txtValueMu.Lock()
+		if txtRecord == "" {
+			txtRecord = "_acme-challenge." + domain
+		}
+		if txtValue == "" {
+			txtValue = token
+		}
+		txtValueMu.Unlock()
+	case <-time.After(90 * time.Second):
+		log.Printf("[ACME] 等待挑战回调超时: domain=%s", domain)
+		txtRecord = "_acme-challenge." + domain
+	}
 
 	log.Printf("[ACME] 初始化挑战: domain=%s, email=%s", domain, email)
 
@@ -200,6 +216,7 @@ func (c *ACMEClient) InitChallenge(domain, email string, dnsProvider DNSProvider
 	encryptedConfig, _ := c.manager.encrypt(string(dnsConfigJSON))
 
 	// 创建待验证挑战
+	txtValueMu.Lock()
 	challenge := &PendingChallenge{
 		Domain:      domain,
 		TXTRecord:   txtRecord,
@@ -210,31 +227,11 @@ func (c *ACMEClient) InitChallenge(domain, email string, dnsProvider DNSProvider
 		DNSConfig:   encryptedConfig,
 		AccountKey:  string(keyPEM),
 	}
+	txtValueMu.Unlock()
 
 	// 保存挑战信息
 	c.challengeMu.Lock()
 	c.challenges[domain] = challenge
-	c.challengeMu.Unlock()
-
-	// 注意：实际的 TXT 值需要在真正开始验证时才能获取
-	// 这里我们需要修改实现方式...
-
-	// 使用预计算方式生成 TXT 值
-	// 为了简化，我们直接开始验证流程，但捕获 Present 回调
-	go func() {
-		// 异步尝试获取证书以触发 Present 回调
-		_, _ = client.Certificate.Obtain(request)
-	}()
-
-	// 等待回调
-	time.Sleep(2 * time.Second)
-
-	// 更新挑战信息
-	c.challengeMu.Lock()
-	if ch, ok := c.challenges[domain]; ok {
-		ch.TXTValue = provider.GetChallenge(domain)
-		challenge = ch
-	}
 	c.challengeMu.Unlock()
 
 	return challenge, nil

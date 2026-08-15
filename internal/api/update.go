@@ -17,6 +17,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"goemail/internal/config"
@@ -230,6 +231,25 @@ func GetUpdateStatusHandler(c *gin.Context) {
 
 // doUpdate 执行实际更新逻辑
 func doUpdate(downloadURL, fileName string) error {
+	// 统一互斥守卫：手动更新 (PerformUpdateHandler) 与自动更新共用同一状态机，
+	// 防止两条 doUpdate 并发执行导致程序文件被并发替换
+	updateMutex.Lock()
+	if currentStatus.Status == "downloading" || currentStatus.Status == "applying" {
+		updateMutex.Unlock()
+		return fmt.Errorf("更新正在进行中")
+	}
+	currentStatus = UpdateStatus{Status: "applying", Progress: 0, Message: "开始更新..."}
+	updateMutex.Unlock()
+
+	// 结束时复位状态 (成功/失败已设置具体状态时不覆盖)
+	defer func() {
+		updateMutex.Lock()
+		if currentStatus.Status == "applying" {
+			currentStatus = UpdateStatus{Status: "idle", Progress: 100, Message: "就绪"}
+		}
+		updateMutex.Unlock()
+	}()
+
 	// 0. 创建备份
 	setStatus("backing_up", 5, "正在创建备份...")
 	backupID, err := CreateBackup(config.Version, true)
@@ -395,6 +415,23 @@ type progressReader struct {
 	onProgress func(int64)
 }
 
+// isPathWithin 判断 target 路径是否位于 baseDir 目录内 (Zip Slip 防护)
+func isPathWithin(baseDir, target string) bool {
+	absBase, err := filepath.Abs(baseDir)
+	if err != nil {
+		return false
+	}
+	absTarget, err := filepath.Abs(target)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(absBase, absTarget)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (!strings.HasPrefix(rel, ".."+string(os.PathSeparator)) && rel != ".." && !filepath.IsAbs(rel))
+}
+
 func (pr *progressReader) Read(p []byte) (int, error) {
 	n, err := pr.reader.Read(p)
 	if n > 0 && pr.onProgress != nil {
@@ -431,7 +468,7 @@ func extractTarGz(archivePath, destDir string) (string, error) {
 
 		// Zip Slip 防护：确保解压路径在目标目录内
 		target := filepath.Join(destDir, header.Name)
-		if absTarget, err := filepath.Abs(target); err != nil || !strings.HasPrefix(absTarget, destDir) {
+		if !isPathWithin(destDir, target) {
 			continue // 跳过恶意路径
 		}
 
@@ -476,7 +513,7 @@ func extractZip(archivePath, destDir string) (string, error) {
 		target := filepath.Join(destDir, f.Name)
 
 		// Zip Slip 防护：确保解压路径在目标目录内
-		if absTarget, err := filepath.Abs(target); err != nil || !strings.HasPrefix(absTarget, destDir) {
+		if !isPathWithin(destDir, target) {
 			continue // 跳过恶意路径
 		}
 
@@ -851,15 +888,14 @@ rm -f "$0"
 // 自动更新检测
 // ============================================
 
-var autoUpdateRunning bool
-var versionCacheRunning bool
+var autoUpdateRunning atomic.Bool
+var versionCacheRunning atomic.Bool
 
 // StartVersionCacheUpdater 启动版本缓存更新后台任务（每60分钟检测一次）
 func StartVersionCacheUpdater() {
-	if versionCacheRunning {
+	if !versionCacheRunning.CompareAndSwap(false, true) {
 		return
 	}
-	versionCacheRunning = true
 
 	go func() {
 		// 启动时立即检测一次，填充缓存
@@ -893,10 +929,9 @@ func StartVersionCacheUpdater() {
 
 // StartAutoUpdateChecker 启动自动更新检测后台任务
 func StartAutoUpdateChecker() {
-	if autoUpdateRunning {
+	if !autoUpdateRunning.CompareAndSwap(false, true) {
 		return
 	}
-	autoUpdateRunning = true
 
 	go func() {
 		// 启动时等待 1 分钟，让服务完全启动
@@ -909,70 +944,65 @@ func StartAutoUpdateChecker() {
 				continue
 			}
 
-			// 获取检查间隔
-			interval := config.AppConfig.AutoUpdateInterval
-			if interval <= 0 {
-				interval = 24 // 默认 24 小时
+			// 定点等待到下一个目标更新时间 (原实现用间隔睡眠 + 30 分钟窗口判断，
+			// 进程在窗口之外启动时会导致自动更新永不触发)
+			nextRun := nextAutoUpdateTime()
+			time.Sleep(time.Until(nextRun))
+
+			if !config.AppConfig.AutoUpdateEnabled {
+				continue // 等待期间配置被关闭
 			}
 
-			// 检查是否到达更新时间
-			if isAutoUpdateTime() {
-				fmt.Println("[AutoUpdate] 检查更新...")
-				
-				// 检查更新
-				info, err := checkForUpdateInternal()
-				if err != nil {
-					fmt.Printf("[AutoUpdate] 检查更新失败: %v\n", err)
+			fmt.Println("[AutoUpdate] 检查更新...")
+
+			// 检查更新
+			info, err := checkForUpdateInternal()
+			if err != nil {
+				fmt.Printf("[AutoUpdate] 检查更新失败: %v\n", err)
+				time.Sleep(1 * time.Hour) // 失败后 1 小时再试
+				continue
+			}
+
+			// 同步更新缓存
+			updateCache(info)
+
+			if info.HasUpdate {
+				fmt.Printf("[AutoUpdate] 发现新版本: %s -> %s\n", info.CurrentVersion, info.LatestVersion)
+
+				// 执行自动更新 (doUpdate 内部有互斥守卫，与手动更新互斥)
+				if err := doUpdate(info.DownloadURL, info.FileName); err != nil {
+					fmt.Printf("[AutoUpdate] 自动更新失败: %v\n", err)
 				} else {
-					// 同步更新缓存
-					updateCache(info)
-					
-					if info.HasUpdate {
-						fmt.Printf("[AutoUpdate] 发现新版本: %s -> %s\n", info.CurrentVersion, info.LatestVersion)
-						
-						// 执行自动更新
-						if err := doUpdate(info.DownloadURL, info.FileName); err != nil {
-							fmt.Printf("[AutoUpdate] 自动更新失败: %v\n", err)
-						} else {
-							fmt.Println("[AutoUpdate] 更新成功，正在重启...")
-							RestartSelf()
-						}
-					} else {
-						fmt.Println("[AutoUpdate] 当前已是最新版本")
-					}
+					fmt.Println("[AutoUpdate] 更新成功，正在重启...")
+					RestartSelf()
 				}
+			} else {
+				fmt.Println("[AutoUpdate] 当前已是最新版本")
 			}
-
-			time.Sleep(time.Duration(interval) * time.Hour)
 		}
 	}()
 
 	fmt.Println("[AutoUpdate] 自动更新检测已启动")
 }
 
-// isAutoUpdateTime 检查是否到达自动更新时间
-func isAutoUpdateTime() bool {
+// nextAutoUpdateTime 计算下一个自动更新执行时刻 (基于配置的 AutoUpdateTime，如 "03:00")
+func nextAutoUpdateTime() time.Time {
 	updateTime := config.AppConfig.AutoUpdateTime
 	if updateTime == "" {
 		updateTime = "03:00" // 默认凌晨 3 点
 	}
 
-	// 解析配置的时间
-	parts := strings.Split(updateTime, ":")
-	if len(parts) != 2 {
-		return false
+	now := time.Now()
+	var hour, minute int
+	if _, err := fmt.Sscanf(updateTime, "%d:%d", &hour, &minute); err != nil || hour < 0 || hour > 23 || minute < 0 || minute > 59 {
+		hour, minute = 3, 0
 	}
 
-	var configHour, configMin int
-	fmt.Sscanf(parts[0], "%d", &configHour)
-	fmt.Sscanf(parts[1], "%d", &configMin)
-
-	now := time.Now()
-	// 检查当前时间是否在配置时间的前后 30 分钟内
-	configTime := time.Date(now.Year(), now.Month(), now.Day(), configHour, configMin, 0, 0, now.Location())
-	diff := now.Sub(configTime)
-	
-	return diff >= 0 && diff < 30*time.Minute
+	next := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, now.Location())
+	if next.Before(now.Add(1 * time.Minute)) {
+		next = next.Add(24 * time.Hour)
+	}
+	return next
 }
 
 // checkForUpdateInternal 内部使用的更新检查函数

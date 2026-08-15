@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
+	"math"
 	"strings"
 	"time"
 )
@@ -127,19 +128,23 @@ func MatchDomain(certDomains []string, targetDomain string) bool {
 	return false
 }
 
-// DaysUntilExpiry 计算证书距离到期还有多少天
+// DaysUntilExpiry 计算证书距离到期还有多少天 (负数表示已过期)
 func DaysUntilExpiry(notAfter time.Time) int {
 	duration := time.Until(notAfter)
+	if duration < 0 {
+		// 已过期：向下取整，保证任何过期时长都返回 <= -1
+		return -int(math.Ceil(-duration.Hours() / 24))
+	}
 	return int(duration.Hours() / 24)
 }
 
 // GetExpiryStatus 获取证书到期状态
 // 返回: "valid", "warning" (30天内), "critical" (7天内), "expired"
 func GetExpiryStatus(notAfter time.Time) string {
-	days := DaysUntilExpiry(notAfter)
-	if days < 0 {
+	if notAfter.Before(time.Now()) {
 		return "expired"
 	}
+	days := DaysUntilExpiry(notAfter)
 	if days <= 7 {
 		return "critical"
 	}

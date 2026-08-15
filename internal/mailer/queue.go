@@ -48,16 +48,30 @@ func SendEmailAsync(req SendRequest) (uint, error) {
 // StartQueueWorker 启动后台队列处理器
 func StartQueueWorker() {
 	log.Println("Starting Email Queue Worker...")
-	
+
+	// 启动恢复：把上次进程退出时遗留的 processing 任务重置为 pending
+	// (进程在发送后、写回 completed 前崩溃会导致任务永久卡在 processing)
+	recoverStaleProcessingTasks()
+
 	// 使用 Ticker 定期轮询
 	// 生产环境可能需要更复杂的触发机制（如 Channel 通知），但对于此规模，轮询足够
 	ticker := time.NewTicker(2 * time.Second)
-	
+
 	go func() {
 		for range ticker.C {
 			processQueue()
 		}
 	}()
+}
+
+// recoverStaleProcessingTasks 将崩溃遗留的 processing 任务重置为 pending
+func recoverStaleProcessingTasks() {
+	result := database.DB.Model(&database.EmailQueue{}).
+		Where("status = ?", "processing").
+		Update("status", "pending")
+	if result.Error == nil && result.RowsAffected > 0 {
+		log.Printf("[Queue] Recovered %d stale processing task(s) to pending", result.RowsAffected)
+	}
 }
 
 func processQueue() {
@@ -166,6 +180,7 @@ func executeTask(task database.EmailQueue) error {
 		Attachments: attachments,
 		ChannelID:   task.ChannelID,
 		TrackingID:  task.TrackingID,
+		CampaignID:  task.CampaignID,
 	}
 
 	// 调用同步发送逻辑

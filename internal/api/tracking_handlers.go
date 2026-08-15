@@ -53,16 +53,18 @@ func TrackOpenHandler(c *gin.Context) {
 	// 1. 查找邮件日志
 	var log database.EmailLog
 	if err := database.DB.Where("tracking_id = ?", trackingID).First(&log).Error; err == nil {
-		// 2. 更新打开状态 (如果尚未打开)
+		// 2. 原子更新打开状态 (WHERE opened = 0 条件更新，防止并发重复计数)
 		if !log.Opened {
 			now := time.Now()
-			database.DB.Model(&log).Updates(map[string]interface{}{
-				"opened":    true,
-				"opened_at": &now,
-			})
+			result := database.DB.Model(&database.EmailLog{}).
+				Where("id = ? AND opened = ?", log.ID, false).
+				Updates(map[string]interface{}{
+					"opened":    true,
+					"opened_at": &now,
+				})
 
-			// 3. 增加 Campaign 的打开计数
-			if log.CampaignID > 0 {
+			// 3. 仅当本请求真正完成状态迁移时才增加 Campaign 的打开计数
+			if result.RowsAffected > 0 && log.CampaignID > 0 {
 				database.DB.Model(&database.Campaign{ID: log.CampaignID}).
 					UpdateColumn("open_count", gorm.Expr("open_count + ?", 1))
 			}
@@ -116,7 +118,14 @@ func TrackClickHandler(c *gin.Context) {
 	trackingID := c.Param("id")
 	targetURL64 := c.Query("url")
 
-	// Base64 URL Decode
+	// 1. 先验证 trackingID 有效性，防止开放重定向 (任意 trackingID 不得触发跳转)
+	var log database.EmailLog
+	if err := database.DB.Where("tracking_id = ?", trackingID).First(&log).Error; err != nil {
+		c.String(http.StatusNotFound, "Invalid tracking link.")
+		return
+	}
+
+	// 2. Base64 URL Decode
 	targetURLBytes, err := base64.URLEncoding.DecodeString(targetURL64)
 	if err != nil {
 		c.String(http.StatusBadRequest, "Invalid URL")
@@ -124,25 +133,21 @@ func TrackClickHandler(c *gin.Context) {
 	}
 	targetURL := string(targetURLBytes)
 
-	// 验证重定向URL，防止开放重定向
+	// 3. 验证重定向URL，防止开放重定向
 	if !validateRedirectURL(targetURL) {
 		c.String(http.StatusBadRequest, "Invalid or unsafe redirect URL")
 		return
 	}
 
-	// 1. 查找日志
-	var log database.EmailLog
-	if err := database.DB.Where("tracking_id = ?", trackingID).First(&log).Error; err == nil {
-		// 2. 增加点击数
-		database.DB.Model(&log).UpdateColumn("clicked_count", gorm.Expr("clicked_count + ?", 1))
+	// 4. 增加点击数
+	database.DB.Model(&log).UpdateColumn("clicked_count", gorm.Expr("clicked_count + ?", 1))
 
-		// 3. 增加 Campaign 点击数
-		if log.CampaignID > 0 {
-			database.DB.Model(&database.Campaign{ID: log.CampaignID}).
-				UpdateColumn("click_count", gorm.Expr("click_count + ?", 1))
-		}
+	// 5. 增加 Campaign 点击数
+	if log.CampaignID > 0 {
+		database.DB.Model(&database.Campaign{ID: log.CampaignID}).
+			UpdateColumn("click_count", gorm.Expr("click_count + ?", 1))
 	}
 
-	// 4. 重定向到原始链接
+	// 6. 重定向到原始链接
 	c.Redirect(http.StatusFound, targetURL)
 }

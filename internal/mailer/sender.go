@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/smtp"
@@ -44,7 +45,8 @@ type SendRequest struct {
 	ChannelID   uint                   `json:"channel_id"` // 0 = Direct, >0 = SMTP Config ID
 	TemplateID  uint                   `json:"template_id"`
 	Variables   map[string]interface{} `json:"variables"`
-	TrackingID  string                 `json:"tracking_id"` // 用于追踪
+	TrackingID  string                 `json:"tracking_id"`  // 用于追踪
+	CampaignID  uint                   `json:"campaign_id"`  // 关联营销任务 (写入 EmailLog 供追踪统计使用)
 }
 
 // SendEmail 统一发送入口
@@ -88,10 +90,10 @@ func SendEmail(req SendRequest) error {
 				// 1. 清理路径，防止 ../ 等遍历攻击
 				localPath = filepath.Clean(localPath)
 
-				// 2. 验证路径是否在允许的目录内
+				// 2. 验证路径是否在允许的目录内 (追加分隔符防止 "uploads2" 前缀混淆)
 				allowedDir, _ := filepath.Abs("data/uploads")
 				absPath, err := filepath.Abs(localPath)
-				if err != nil || !strings.HasPrefix(absPath, allowedDir) {
+				if err != nil || !(absPath == allowedDir || strings.HasPrefix(absPath, allowedDir+string(os.PathSeparator))) {
 					return logAndReturnError(req, fmt.Sprintf("blocked_path_traversal: %s", localPath), fmt.Errorf("access to path outside allowed directory is blocked"))
 				}
 
@@ -103,9 +105,21 @@ func SendEmail(req SendRequest) error {
 				data = fileData
 			} else {
 				// 3. 尝试从远程 URL 下载 (SSRF 防护)
-				// 创建安全的 HTTP Client
+				// 创建安全的 HTTP Client：
+				// - 禁止自动跟随重定向到内网 (逐跳 SSRF 校验)
+				// - 自定义 DialContext 在实际连接时再次校验 IP，防止 DNS 重绑定
 				client := &http.Client{
 					Timeout: 10 * time.Second,
+					CheckRedirect: func(req *http.Request, via []*http.Request) error {
+						if len(via) >= 5 {
+							return fmt.Errorf("too many redirects")
+						}
+						// 重定向目标同样需要 SSRF 校验
+						if security.IsInternalURL(req.URL.String()) {
+							return fmt.Errorf("redirect to internal network is blocked")
+						}
+						return nil
+					},
 					Transport: &http.Transport{
 						DialContext: (&net.Dialer{
 							Timeout:   5 * time.Second,
@@ -114,8 +128,8 @@ func SendEmail(req SendRequest) error {
 					},
 				}
 
-			// 检查 URL 是否指向内网
-			if security.IsInternalURL(att.URL) {
+				// 检查 URL 是否指向内网
+				if security.IsInternalURL(att.URL) {
 					return logAndReturnError(req, fmt.Sprintf("blocked_internal_url: %s", att.URL), fmt.Errorf("access to internal network is blocked"))
 				}
 
@@ -124,16 +138,19 @@ func SendEmail(req SendRequest) error {
 					return logAndReturnError(req, fmt.Sprintf("failed_download_attachment: %s", att.URL), err)
 				}
 				defer resp.Body.Close()
-				
+
 				if resp.StatusCode != http.StatusOK {
 					return logAndReturnError(req, fmt.Sprintf("failed_download_attachment_status_%d", resp.StatusCode), fmt.Errorf("status %d", resp.StatusCode))
 				}
-				
-				// 限制大小 (例如 10MB)
+
+				// 限制大小 (10MB)，检测截断：多读 1 字节判断是否超过上限
 				const MaxDownloadSize = 10 * 1024 * 1024
-				data, err = io.ReadAll(io.LimitReader(resp.Body, MaxDownloadSize))
+				data, err = io.ReadAll(io.LimitReader(resp.Body, MaxDownloadSize+1))
 				if err != nil {
 					return logAndReturnError(req, "failed_read_attachment_body", err)
+				}
+				if len(data) > MaxDownloadSize {
+					return logAndReturnError(req, fmt.Sprintf("attachment_too_large: %s", att.URL), fmt.Errorf("attachment exceeds %d bytes", MaxDownloadSize))
 				}
 			}
 		} else {
@@ -281,17 +298,21 @@ func sendWithSMTPConfig(req SendRequest, from, to string, msg []byte, cfg databa
 		// 显式 STARTTLS (通常端口 587)
 		// 覆盖 smtp.SendMail 以强制使用我们的 tlsConfig (smtp.SendMail 默认会尝试 StartTLS 但使用默认 InsecureSkipVerify=true 如果没有提供 config)
 		// 标准库 smtp.SendMail 不接受 tlsConfig，所以我们必须手动实现 Dial/StartTLS
-		
+
 		c, err := smtp.Dial(addr)
 		if err != nil {
 			return logAndReturnError(req, "smtp_dial_failed", err)
 		}
 		defer c.Quit()
 
+		// 安全修复：服务器不支持 STARTTLS 时拒绝在明文连接上发送 PLAIN 凭据
 		if ok, _ := c.Extension("STARTTLS"); ok {
 			if err = c.StartTLS(tlsConfig); err != nil {
 				return logAndReturnError(req, "smtp_starttls_failed", err)
 			}
+		} else if cfg.Username != "" {
+			// 需要认证但服务器不支持加密传输 → 硬失败，防止凭据明文泄露
+			return logAndReturnError(req, "smtp_tls_required", fmt.Errorf("SMTP server %s does not support STARTTLS; refusing to send credentials in plaintext", cfg.Host))
 		}
 
 		if err = c.Auth(auth); err != nil {
@@ -362,7 +383,10 @@ func sendByDirect(req SendRequest, from, to string, msg []byte) error {
 		// 尝试 StartTLS
 		if ok, _ := c.Extension("STARTTLS"); ok {
 			// Direct Send 连接对方 MX，无法预知证书情况，通常保持 InsecureSkipVerify: true
-			_ = c.StartTLS(&tls.Config{InsecureSkipVerify: true, ServerName: host})
+			// StartTLS 失败时底层连接仍为明文，回退明文发送 (与不支持 STARTTLS 等价)，但记录日志
+			if err := c.StartTLS(&tls.Config{InsecureSkipVerify: true, ServerName: host}); err != nil {
+				log.Printf("[DirectSend] STARTTLS failed for %s: %v, fallback to plaintext", host, err)
+			}
 		}
 
 		if err = c.Mail(from); err != nil { c.Close(); lastErr = err; continue }
@@ -409,7 +433,7 @@ func logAndReturnError(req SendRequest, reason string, err error) error {
 		channel = "auto"
 	}
 
-	database.DB.Create(&database.EmailLog{
+	logEntry := database.EmailLog{
 		Recipient:  req.To,
 		Subject:    req.Subject,
 		Body:       req.Body, // 保存正文
@@ -417,17 +441,49 @@ func logAndReturnError(req SendRequest, reason string, err error) error {
 		ErrorMsg:   fmt.Sprintf("%s: %s", reason, msg),
 		Channel:    channel,
 		TrackingID: req.TrackingID,
-	})
+		CampaignID: req.CampaignID,
+	}
+	// 按 tracking_id 更新已有日志，避免队列重试产生重复的失败记录 (统计数据虚高)
+	if req.TrackingID != "" {
+		result := database.DB.Model(&database.EmailLog{}).
+			Where("tracking_id = ?", req.TrackingID).
+			Updates(map[string]interface{}{
+				"status":     "failed",
+				"error_msg":  logEntry.ErrorMsg,
+				"channel":    logEntry.Channel,
+				"campaign_id": logEntry.CampaignID,
+			})
+		if result.RowsAffected > 0 {
+			return fmt.Errorf("%s: %v", reason, err)
+		}
+	}
+	database.DB.Create(&logEntry)
 	return fmt.Errorf("%s: %v", reason, err)
 }
 
 func logSuccess(req SendRequest, channel string) {
-	database.DB.Create(&database.EmailLog{
+	logEntry := database.EmailLog{
 		Recipient:  req.To,
 		Subject:    req.Subject,
 		Body:       req.Body, // 保存正文
 		Status:     "success",
 		Channel:    channel,
 		TrackingID: req.TrackingID,
-	})
+		CampaignID: req.CampaignID,
+	}
+	// 按 tracking_id 更新已有日志 (重试成功后覆盖之前的 failed 记录)
+	if req.TrackingID != "" {
+		result := database.DB.Model(&database.EmailLog{}).
+			Where("tracking_id = ?", req.TrackingID).
+			Updates(map[string]interface{}{
+				"status":      "success",
+				"error_msg":   "",
+				"channel":     channel,
+				"campaign_id": logEntry.CampaignID,
+			})
+		if result.RowsAffected > 0 {
+			return
+		}
+	}
+	database.DB.Create(&logEntry)
 }

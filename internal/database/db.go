@@ -230,8 +230,9 @@ func GetStats() (Stats, error) {
 		return stats, err
 	}
 
-	// 今日发送量
-	startOfDay := time.Now().Truncate(24 * time.Hour)
+	// 今日发送量 (本地时区零点，而非 UTC 零点)
+	now := time.Now()
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	if err = DB.Model(&EmailLog{}).Where("created_at >= ?", startOfDay).Count(&stats.TodaySent).Error; err != nil {
 		return stats, err
 	}
@@ -258,8 +259,7 @@ func GetStats() (Stats, error) {
 		Count int64
 	}
 	var results []TrendResult
-	
-	now := time.Now()
+
 	startTime := now.Add(-12 * time.Hour)
 
 	err = DB.Model(&EmailLog{}).

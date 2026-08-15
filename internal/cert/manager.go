@@ -33,7 +33,11 @@ func NewManager() *Manager {
 	// 使用 JWT Secret 派生加密密钥
 	secret := config.AppConfig.JWTSecret
 	if secret == "" {
-		secret = "default-secret-key"
+		// JWT Secret 为空时生成随机密钥作为 fallback (仅本次进程使用)
+		// 注意：正常流程中 LoadConfig 会保证 JWTSecret 非空
+		b := make([]byte, 32)
+		rand.Read(b)
+		secret = base64.StdEncoding.EncodeToString(b)
 	}
 	hash := sha256.Sum256([]byte(secret))
 	return &Manager{
@@ -125,14 +129,22 @@ func (m *Manager) SaveCertificate(cert *database.Certificate, certPEM, keyPEM st
 	}
 
 	// 4. 生成文件名 (使用域名和时间戳)
-	primaryDomain := certInfo.Domains[0]
-	if len(certInfo.Domains) > 0 {
-		primaryDomain = certInfo.Domains[0]
+	if len(certInfo.Domains) == 0 {
+		return fmt.Errorf("证书不含任何域名 (CN/DNS SAN 为空)")
 	}
+	primaryDomain := certInfo.Domains[0]
 	safeDomain := strings.ReplaceAll(primaryDomain, "*", "wildcard")
 	safeDomain = strings.ReplaceAll(safeDomain, ".", "_")
+	// 过滤路径分隔符等非法字符，防止恶意证书域名导致路径遍历
+	safeDomain = strings.Map(func(r rune) rune {
+		switch r {
+		case '/', '\\', ':', '<', '>', '"', '|', '?', '*', 0:
+			return '_'
+		}
+		return r
+	}, safeDomain)
 	timestamp := time.Now().Format("20060102_150405")
-	
+
 	certFilename := fmt.Sprintf("%s_%s.crt", safeDomain, timestamp)
 	keyFilename := fmt.Sprintf("%s_%s.key", safeDomain, timestamp)
 	
@@ -246,6 +258,42 @@ func (m *Manager) DeleteCertificate(id uint) error {
 // GetDecryptedKey 获取解密后的私钥
 func (m *Manager) GetDecryptedKey(cert *database.Certificate) (string, error) {
 	return m.decrypt(cert.KeyPEM)
+}
+
+// Rekey 使用新的 JWT Secret 重新加密所有已加密的敏感数据 (证书私钥、DNS 配置)
+// 在 JWT Secret 轮换时调用，避免已存储的加密数据永久无法解密
+func (m *Manager) Rekey(newSecret string) error {
+	newKey := sha256.Sum256([]byte(newSecret))
+	newManager := &Manager{encryptionKey: newKey[:]}
+
+	var certs []database.Certificate
+	if err := database.DB.Find(&certs).Error; err != nil {
+		return err
+	}
+
+	for i := range certs {
+		updates := map[string]interface{}{}
+		if certs[i].KeyPEM != "" {
+			plain, err := m.decrypt(certs[i].KeyPEM)
+			if err == nil {
+				if enc, err := newManager.encrypt(plain); err == nil {
+					updates["key_pem"] = enc
+				}
+			}
+		}
+		if certs[i].DNSConfig != "" {
+			plain, err := m.decrypt(certs[i].DNSConfig)
+			if err == nil {
+				if enc, err := newManager.encrypt(plain); err == nil {
+					updates["dns_config"] = enc
+				}
+			}
+		}
+		if len(updates) > 0 {
+			database.DB.Model(&database.Certificate{}).Where("id = ?", certs[i].ID).Updates(updates)
+		}
+	}
+	return nil
 }
 
 // ApplyCertToDomain 将证书应用到域名

@@ -3,6 +3,8 @@ package api
 import (
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -113,7 +115,28 @@ func DeleteInboxItemHandler(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete message"})
 		return
 	}
+	// 级联删除关联的附件文件 (磁盘 + 数据库记录)
+	if parsedID, err := strconv.ParseUint(id, 10, 64); err == nil {
+		deleteInboxAttachments(uint(parsedID))
+	}
 	c.JSON(http.StatusOK, gin.H{"message": "Deleted successfully"})
+}
+
+// deleteInboxAttachments 删除指定收件箱邮件关联的附件 (磁盘文件 + 数据库记录)
+func deleteInboxAttachments(inboxID uint) {
+	relatedTo := fmt.Sprintf("inbox:%d", inboxID)
+	var attachments []database.AttachmentFile
+	database.DB.Where("related_to = ?", relatedTo).Find(&attachments)
+	for _, att := range attachments {
+		if att.FilePath != "" {
+			fullPath := att.FilePath
+			if !filepath.IsAbs(fullPath) {
+				fullPath = filepath.Join(".", fullPath)
+			}
+			os.Remove(fullPath)
+		}
+	}
+	database.DB.Unscoped().Where("related_to = ?", relatedTo).Delete(&database.AttachmentFile{})
 }
 
 // BatchMarkReadHandler 批量标记已读
@@ -168,10 +191,19 @@ func BatchDeleteHandler(c *gin.Context) {
 	var err error
 
 	if req.All {
+		// 删除所有邮件前，级联删除所有关联附件
+		var allIDs []uint
+		database.DB.Model(&database.Inbox{}).Pluck("id", &allIDs)
+		for _, inboxID := range allIDs {
+			deleteInboxAttachments(inboxID)
+		}
 		result := database.DB.Where("1 = 1").Delete(&database.Inbox{})
 		affected = result.RowsAffected
 		err = result.Error
 	} else if len(req.IDs) > 0 {
+		for _, inboxID := range req.IDs {
+			deleteInboxAttachments(inboxID)
+		}
 		result := database.DB.Where("id IN ?", req.IDs).Delete(&database.Inbox{})
 		affected = result.RowsAffected
 		err = result.Error
@@ -212,9 +244,10 @@ func GetInboxStatsHandler(c *gin.Context) {
 	database.DB.Model(&database.Inbox{}).Count(&total)
 	database.DB.Model(&database.Inbox{}).Where("is_read = ?", false).Count(&unread)
 
-	// 今日收件数
+	// 今日收件数 (本地时区零点，而非 UTC 零点)
 	var todayCount int64
-	today := time.Now().Truncate(24 * time.Hour)
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	database.DB.Model(&database.Inbox{}).Where("created_at >= ?", today).Count(&todayCount)
 
 	c.JSON(http.StatusOK, gin.H{
@@ -262,7 +295,8 @@ func UpdateReceiverConfigHandler(c *gin.Context) {
 		return
 	}
 
-	// 更新配置
+	// 更新配置 (加锁保护，与读取方并发安全)
+	config.ConfigMu.Lock()
 	if req.EnableReceiver != nil {
 		config.AppConfig.EnableReceiver = *req.EnableReceiver
 	}
@@ -282,6 +316,11 @@ func UpdateReceiverConfigHandler(c *gin.Context) {
 		config.AppConfig.ReceiverRateLimit = *req.ReceiverRateLimit
 	}
 	if req.ReceiverMaxMsgSize != nil {
+		if *req.ReceiverMaxMsgSize <= 0 {
+			config.ConfigMu.Unlock()
+			c.JSON(http.StatusBadRequest, gin.H{"error": "ReceiverMaxMsgSize must be greater than 0"})
+			return
+		}
 		config.AppConfig.ReceiverMaxMsgSize = *req.ReceiverMaxMsgSize
 	}
 	if req.ReceiverSpamFilter != nil {
@@ -296,9 +335,11 @@ func UpdateReceiverConfigHandler(c *gin.Context) {
 
 	// 保存配置
 	if err := config.SaveConfig(config.AppConfig); err != nil {
+		config.ConfigMu.Unlock()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save config"})
 		return
 	}
+	config.ConfigMu.Unlock()
 
 	// 重新加载收件配置
 	receiver.ReloadConfig()

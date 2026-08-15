@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"image/png"
+	"net/url"
 	"time"
 
 	"github.com/pquerna/otp"
@@ -75,5 +76,10 @@ func ValidateTOTP(secret, code string) bool {
 // GetTOTPProvisioningURI 获取用于手动输入的 TOTP URI
 // 格式: otpauth://totp/QingChenMail:username?secret=XXX&issuer=QingChenMail
 func GetTOTPProvisioningURI(secret, username string) string {
-	return "otpauth://totp/" + TOTPIssuer + ":" + username + "?secret=" + secret + "&issuer=" + TOTPIssuer
+	// 对 label 与参数做 URL 编码，避免用户名含特殊字符时生成非法 URI
+	label := url.PathEscape(TOTPIssuer + ":" + username)
+	params := url.Values{}
+	params.Set("secret", secret)
+	params.Set("issuer", TOTPIssuer)
+	return "otpauth://totp/" + label + "?" + params.Encode()
 }
