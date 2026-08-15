@@ -1,6 +1,9 @@
 package api
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"os"
 	"testing"
 )
 
@@ -47,5 +50,50 @@ func TestSplitPreRelease(t *testing.T) {
 		if base != tt.base || pre != tt.preRel {
 			t.Errorf("splitPreRelease(%q) = (%q, %q), want (%q, %q)", tt.input, base, pre, tt.base, tt.preRel)
 		}
+	}
+}
+
+func TestExtractTagFromURL(t *testing.T) {
+	tests := []struct {
+		url      string
+		expected string
+	}{
+		{"https://github.com/1186258278/QingChenMail/releases/download/v1.3.8/QingChenMail_Windows_x86_64.zip", "v1.3.8"},
+		{"https://github.com/1186258278/QingChenMail/releases/download/v1.3.9-beta1/QingChenMail_Linux_x86_64.tar.gz", "v1.3.9-beta1"},
+		{"https://objects.githubusercontent.com/abc/def.zip", ""},
+		{"https://github.com/1186258278/QingChenMail/releases/tag/v1.3.8", ""},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		result := extractTagFromURL(tt.url)
+		if result != tt.expected {
+			t.Errorf("extractTagFromURL(%q) = %q, want %q", tt.url, result, tt.expected)
+		}
+	}
+}
+
+func TestVerifyChecksum(t *testing.T) {
+	dir := t.TempDir()
+	filePath := dir + "/test.bin"
+
+	content := []byte("hello checksum")
+	if err := os.WriteFile(filePath, content, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	sum := sha256.Sum256(content)
+	expected := hex.EncodeToString(sum[:])
+
+	if err := verifyChecksum(filePath, expected); err != nil {
+		t.Errorf("verifyChecksum with correct checksum failed: %v", err)
+	}
+
+	if err := verifyChecksum(filePath, "deadbeef"); err == nil {
+		t.Error("verifyChecksum with wrong checksum should fail")
+	}
+
+	if err := verifyChecksum(dir+"/nonexistent.bin", expected); err == nil {
+		t.Error("verifyChecksum with missing file should fail")
 	}
 }

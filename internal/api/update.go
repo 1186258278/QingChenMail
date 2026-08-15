@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -251,6 +252,11 @@ func doUpdate(downloadURL, fileName string) error {
 		updateMutex.Unlock()
 	}()
 
+	// 0. 校验文件名，防止路径穿越 (fileName 决定临时文件保存路径与解压器类型)
+	if fileName == "" || filepath.Base(fileName) != fileName || fileName == "." || fileName == ".." {
+		return fmt.Errorf("无效的文件名: %s", fileName)
+	}
+
 	// 0. 创建备份
 	setStatus("backing_up", 5, "正在创建备份...")
 	backupID, err := CreateBackup(config.Version, true)
@@ -306,6 +312,12 @@ func doUpdate(downloadURL, fileName string) error {
 		return fmt.Errorf("下载写入失败: %w", err)
 	}
 	outFile.Close()
+
+	// 1.5 校验下载包的 SHA-256 校验和 (供应链完整性验证)
+	setStatus("verifying", 55, "正在验证更新包校验和...")
+	if err := verifyDownloadChecksum(downloadURL, fileName, tempArchive); err != nil {
+		return err
+	}
 
 	setStatus("extracting", 60, "正在解压更新包...")
 
@@ -740,6 +752,71 @@ func verifyChecksum(filePath, expectedChecksum string) error {
 	}
 
 	return nil
+}
+
+// verifyDownloadChecksum 从官方 checksums.txt 获取并验证下载归档的 SHA-256 校验和。
+// 策略: 一旦拿到官方校验和，不匹配将拒绝更新；若 checksums.txt 因网络原因获取失败，
+// 则跳过验证 (维持 TLS + URL 白名单兜底，避免国内网络环境下更新功能完全不可用)。
+func verifyDownloadChecksum(downloadURL, fileName, archivePath string) error {
+	// 从下载 URL 解析版本 tag: .../releases/download/<tag>/<file>
+	tag := extractTagFromURL(downloadURL)
+	if tag == "" {
+		log.Printf("[Update] 无法从下载 URL 解析版本 tag，跳过校验和验证: %s", downloadURL)
+		return nil
+	}
+
+	// 下载官方 checksums.txt
+	checksumsURL := fmt.Sprintf("https://github.com/1186258278/QingChenMail/releases/download/%s/checksums.txt", tag)
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(checksumsURL)
+	if err != nil {
+		log.Printf("[Update] 无法获取校验文件，跳过验证: %v", err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("[Update] 校验文件不存在 (HTTP %d)，跳过验证", resp.StatusCode)
+		return nil
+	}
+
+	// 解析 checksums.txt，查找 fileName 对应的 sha256
+	expected := ""
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		parts := strings.Fields(scanner.Text())
+		if len(parts) == 2 && parts[1] == fileName {
+			expected = parts[0]
+			break
+		}
+	}
+
+	if expected == "" {
+		log.Printf("[Update] 校验文件中未找到 %s 的条目，跳过验证", fileName)
+		return nil
+	}
+
+	if err := verifyChecksum(archivePath, expected); err != nil {
+		return fmt.Errorf("更新包校验失败 (可能存在篡改或下载不完整): %w", err)
+	}
+
+	log.Printf("[Update] 更新包校验和验证通过: %s (%s)", fileName, expected[:12])
+	return nil
+}
+
+// extractTagFromURL 从 GitHub release 下载 URL 中提取版本 tag
+// 格式: https://github.com/<owner>/<repo>/releases/download/<tag>/<filename>
+func extractTagFromURL(downloadURL string) string {
+	idx := strings.Index(downloadURL, "/releases/download/")
+	if idx == -1 {
+		return ""
+	}
+	rest := downloadURL[idx+len("/releases/download/"):]
+	parts := strings.SplitN(rest, "/", 2)
+	if len(parts) == 0 || parts[0] == "" {
+		return ""
+	}
+	return parts[0]
 }
 
 // RestartHandler 重启服务
