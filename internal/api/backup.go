@@ -15,6 +15,8 @@ import (
 	"goemail/internal/database"
 
 	"github.com/gin-gonic/gin"
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
 )
 
 // BackupInfo 备份信息结构
@@ -61,7 +63,7 @@ func CreateBackupHandler(c *gin.Context) {
 	for _, b := range backups {
 		if b.ID == backupID {
 			c.JSON(http.StatusOK, gin.H{
-				"message": "备份创建成功",
+				"message": "备份创建成功 (备份不含发送日志/转发日志，以减小体积)",
 				"backup":  b,
 			})
 			return
@@ -69,7 +71,7 @@ func CreateBackupHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":   "备份创建成功",
+		"message":   "备份创建成功 (备份不含发送日志/转发日志，以减小体积)",
 		"backup_id": backupID,
 	})
 }
@@ -179,7 +181,7 @@ func RestoreBackupHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":       "恢复成功",
+		"message":       "恢复成功 (注意: 备份不含发送日志/转发日志，恢复后这些数据为空)",
 		"restored":      restoredFiles,
 		"needs_restart": needsRestart,
 		"version":       manifest.Version,
@@ -245,14 +247,10 @@ func CreateBackup(version string, isAuto bool) (string, error) {
 
 	files := []string{}
 
-	// 1. 备份数据库
+	// 1. 备份数据库 (排除发送日志等大表，减小备份体积)
 	if _, err := os.Stat("goemail.db"); err == nil {
-		// WAL 模式下数据可能仍在 -wal 文件中，先 checkpoint 落盘再复制，
-		// 否则备份可能丢失未合并的数据或产生不一致副本
-		if sqlDB, err := database.DB.DB(); err == nil {
-			sqlDB.Exec("PRAGMA wal_checkpoint(TRUNCATE)")
-		}
-		if err := copyFile("goemail.db", filepath.Join(backupPath, "goemail.db")); err != nil {
+		// 生成清理过的数据库快照 (WAL checkpoint + 删除日志大表)
+		if err := createCleanDBBackup(filepath.Join(backupPath, "goemail.db")); err != nil {
 			return "", fmt.Errorf("备份数据库失败: %w", err)
 		}
 		files = append(files, "goemail.db")
@@ -402,4 +400,48 @@ func copyFile(src, dst string) error {
 	}
 
 	return nil
+}
+
+// createCleanDBBackup 生成清理过的数据库备份快照
+// 先 WAL checkpoint 落盘，再用 VACUUM INTO 生成一致性快照，
+// 并在快照副本上删除大表数据 (发送日志/转发日志/已完成队列)，压缩后复制到目标路径。
+// 目的：备份不含邮件正文等日志数据，显著减小备份体积。
+func createCleanDBBackup(destPath string) error {
+	// 1. WAL checkpoint，确保数据落入主库文件
+	sqlDB, err := database.DB.DB()
+	if err != nil {
+		return err
+	}
+	if _, err := sqlDB.Exec("PRAGMA wal_checkpoint(TRUNCATE)"); err != nil {
+		return fmt.Errorf("WAL checkpoint 失败: %w", err)
+	}
+
+	// 2. VACUUM INTO 生成一致性快照 (SQLite 官方推荐的在线备份方式)
+	tmpPath := filepath.Join(os.TempDir(), fmt.Sprintf("goemail-backup-%d.db", time.Now().UnixNano()))
+	defer os.Remove(tmpPath)
+
+	// SQL 中路径使用正斜杠并转义单引号
+	sqlPath := strings.ReplaceAll(tmpPath, "\\", "/")
+	sqlPath = strings.ReplaceAll(sqlPath, "'", "''")
+	if _, err := sqlDB.Exec(fmt.Sprintf("VACUUM INTO '%s'", sqlPath)); err != nil {
+		return fmt.Errorf("生成数据库快照失败: %w", err)
+	}
+
+	// 3. 打开快照副本，删除大表数据
+	tmpDB, err := gorm.Open(sqlite.Open(tmpPath), &gorm.Config{})
+	if err != nil {
+		return fmt.Errorf("打开数据库快照失败: %w", err)
+	}
+
+	tmpDB.Exec("DELETE FROM email_logs")                                        // 发送日志 (含邮件正文，占用最大)
+	tmpDB.Exec("DELETE FROM forward_logs")                                      // 转发日志
+	tmpDB.Exec("DELETE FROM email_queues WHERE status IN ('completed','dead')") // 已完成/最终失败的队列记录
+	tmpDB.Exec("VACUUM")
+
+	if sqlTmpDB, err := tmpDB.DB(); err == nil {
+		sqlTmpDB.Close()
+	}
+
+	// 4. 复制快照到目标路径
+	return copyFile(tmpPath, destPath)
 }

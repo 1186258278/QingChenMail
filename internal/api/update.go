@@ -173,15 +173,6 @@ func GetUpdateInfoHandler(c *gin.Context) {
 
 // PerformUpdateHandler 执行在线更新
 func PerformUpdateHandler(c *gin.Context) {
-	updateMutex.Lock()
-	if currentStatus.Status == "downloading" || currentStatus.Status == "applying" {
-		updateMutex.Unlock()
-		c.JSON(http.StatusConflict, gin.H{"error": "更新正在进行中"})
-		return
-	}
-	currentStatus = UpdateStatus{Status: "downloading", Progress: 0, Message: "开始下载..."}
-	updateMutex.Unlock()
-
 	// 获取请求参数
 	var req struct {
 		DownloadURL string `json:"download_url"`
@@ -211,6 +202,12 @@ func PerformUpdateHandler(c *gin.Context) {
 		return
 	}
 
+	// 原子抢占更新状态，防止与自动更新并发
+	if !tryBeginUpdate("downloading", "开始下载...") {
+		c.JSON(http.StatusConflict, gin.H{"error": "更新正在进行中"})
+		return
+	}
+
 	// 异步执行更新
 	go func() {
 		if err := doUpdate(req.DownloadURL, req.FileName); err != nil {
@@ -219,6 +216,18 @@ func PerformUpdateHandler(c *gin.Context) {
 	}()
 
 	c.JSON(http.StatusOK, gin.H{"message": "更新已开始", "status": "downloading"})
+}
+
+// tryBeginUpdate 原子抢占更新状态 (CAS)，返回是否抢占成功。
+// 手动更新与自动更新都必须通过本函数抢占后才能调用 doUpdate
+func tryBeginUpdate(status, message string) bool {
+	updateMutex.Lock()
+	defer updateMutex.Unlock()
+	if currentStatus.Status == "downloading" || currentStatus.Status == "applying" {
+		return false
+	}
+	currentStatus = UpdateStatus{Status: status, Progress: 0, Message: message}
+	return true
 }
 
 // GetUpdateStatusHandler 获取更新状态
@@ -231,20 +240,12 @@ func GetUpdateStatusHandler(c *gin.Context) {
 
 // doUpdate 执行实际更新逻辑
 func doUpdate(downloadURL, fileName string) error {
-	// 统一互斥守卫：手动更新 (PerformUpdateHandler) 与自动更新共用同一状态机，
-	// 防止两条 doUpdate 并发执行导致程序文件被并发替换
-	updateMutex.Lock()
-	if currentStatus.Status == "downloading" || currentStatus.Status == "applying" {
-		updateMutex.Unlock()
-		return fmt.Errorf("更新正在进行中")
-	}
-	currentStatus = UpdateStatus{Status: "applying", Progress: 0, Message: "开始更新..."}
-	updateMutex.Unlock()
-
-	// 结束时复位状态 (成功/失败已设置具体状态时不覆盖)
+	// 状态已由调用方通过 tryBeginUpdate 抢占 (手动: downloading / 自动: applying)
+	// 结束时复位状态 (成功/失败已设置具体状态时不覆盖；覆盖 panic 等异常路径)
 	defer func() {
 		updateMutex.Lock()
-		if currentStatus.Status == "applying" {
+		st := currentStatus.Status
+		if st == "applying" || st == "downloading" {
 			currentStatus = UpdateStatus{Status: "idle", Progress: 100, Message: "就绪"}
 		}
 		updateMutex.Unlock()
@@ -969,7 +970,13 @@ func StartAutoUpdateChecker() {
 			if info.HasUpdate {
 				fmt.Printf("[AutoUpdate] 发现新版本: %s -> %s\n", info.CurrentVersion, info.LatestVersion)
 
-				// 执行自动更新 (doUpdate 内部有互斥守卫，与手动更新互斥)
+				// 抢占更新状态 (与手动更新互斥)，失败则跳过本轮
+				if !tryBeginUpdate("applying", "自动更新中...") {
+					fmt.Println("[AutoUpdate] 已有更新在进行中，跳过本轮")
+					continue
+				}
+
+				// 执行自动更新
 				if err := doUpdate(info.DownloadURL, info.FileName); err != nil {
 					fmt.Printf("[AutoUpdate] 自动更新失败: %v\n", err)
 				} else {

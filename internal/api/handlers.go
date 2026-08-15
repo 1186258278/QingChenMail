@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"log"
 	mathrand "math/rand"
 	"net"
 	"net/http"
@@ -1364,12 +1365,33 @@ func BackupHandler(c *gin.Context) {
 	zipWriter := zip.NewWriter(c.Writer)
 	defer zipWriter.Close()
 
+	// 数据库使用清理过的快照 (排除发送日志等大表)，减少备份体积
+	var dbTempPath string
+	if _, err := os.Stat("goemail.db"); err == nil {
+		dbTempPath = filepath.Join(os.TempDir(), fmt.Sprintf("goemail-backup-%d.db", time.Now().UnixNano()))
+		if err := createCleanDBBackup(dbTempPath); err != nil {
+			log.Printf("[Backup] createCleanDBBackup failed: %v", err)
+			dbTempPath = ""
+		} else {
+			log.Printf("[Backup] clean db snapshot created: %s", dbTempPath)
+		}
+		defer os.Remove(dbTempPath)
+	} else {
+		log.Printf("[Backup] goemail.db not found: %v", err)
+	}
+
 	files := []string{"config.json", "goemail.db"}
 
 	for _, filename := range files {
 		// 使用闭包立即处理文件，避免 defer 在循环中累积
 		func() {
-			f, err := os.Open(filename)
+			// goemail.db 使用清理后的临时快照
+			srcPath := filename
+			if filename == "goemail.db" && dbTempPath != "" {
+				srcPath = dbTempPath
+			}
+
+			f, err := os.Open(srcPath)
 			if err != nil {
 				return
 			}
