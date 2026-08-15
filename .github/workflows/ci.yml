@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Unit tests
+        run: go test ./...
+
+      - name: Race tests (internal packages)
+        run: go test -race ./internal/...
+
+      - name: Build check (linux amd64)
+        run: GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o /dev/null main.go
+
+      - name: Build check (windows amd64)
+        run: GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -o /dev/null main.go
+
+      - name: Build check (darwin amd64)
+        run: GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -o /dev/null main.go
