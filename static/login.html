@@ -306,23 +306,9 @@
         }
         loadWallpaper();
 
-        // SHA-256 加密工具
-        async function sha256(message) {
-            if (window.crypto && window.crypto.subtle) {
-                try {
-                    const msgBuffer = new TextEncoder().encode(message);
-                    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-                    const hashArray = Array.from(new Uint8Array(hashBuffer));
-                    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-                    return hashHex;
-                } catch (e) {
-                    console.warn("Crypto API error:", e);
-                }
-            }
-            console.warn("Insecure context: Sending plaintext password");
-            return message;
-        }
-
+        // 说明：密码直接以明文发送，由 HTTPS/TLS 保证传输安全。
+        // 历史版本曾在前端做 SHA-256 哈希，导致与后端 bcrypt 存储协议不一致 (登录/重置后密码错误)。
+        // 客户端哈希无法防止重放攻击，安全依赖 TLS 加密，故统一为明文 + 后端 bcrypt。
         async function loadCaptcha() {
             const img = document.getElementById('captcha-img');
             const loading = document.getElementById('captcha-loading');
@@ -331,7 +317,8 @@
             loading.classList.remove('hidden');
 
             try {
-                const res = await fetch('/api/v1/captcha');
+                // cache: 'no-store' 防止浏览器/代理缓存旧的验证码响应 (一次性验证码)
+                const res = await fetch('/api/v1/captcha', { cache: 'no-store' });
                 const data = await res.json();
                 document.getElementById('captcha-id').value = data.captcha_id;
                 img.src = data.image;
@@ -346,19 +333,17 @@
         async function handleLogin(e) {
             e.preventDefault();
             const username = document.getElementById('username').value;
-            const passwordRaw = document.getElementById('password').value;
+            const password = document.getElementById('password').value;
             const captchaId = document.getElementById('captcha-id').value;
             const captchaCode = document.getElementById('captcha-code').value;
 
             try {
-                const passwordHash = await sha256(passwordRaw);
-
                 const res = await fetch('/api/v1/login', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
                         username, 
-                        password: passwordHash,
+                        password,
                         captcha_id: captchaId,
                         captcha_code: captchaCode
                     })
@@ -376,6 +361,7 @@
                 } else {
                     let errorMsg = data.error;
                     if (I18n && I18n.isReady) {
+                        if (errorMsg === 'Invalid or expired captcha code') errorMsg = I18n.t('error.invalid_captcha');
                         if (errorMsg === 'Invalid captcha code') errorMsg = I18n.t('error.invalid_captcha');
                         if (errorMsg === 'Captcha code required') errorMsg = I18n.t('error.captcha_required');
                         if (errorMsg === 'Invalid credentials') errorMsg = I18n.t('error.invalid_credentials');

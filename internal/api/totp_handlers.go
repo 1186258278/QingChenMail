@@ -272,7 +272,12 @@ func TOTPVerifyHandler(c *gin.Context) {
 func verifyUserPassword(stored, input string) bool {
 	// 如果是 bcrypt 哈希
 	if strings.HasPrefix(stored, "$2a$") || strings.HasPrefix(stored, "$2b$") {
-		return database.CheckPasswordHash(input, stored)
+		if database.CheckPasswordHash(input, stored) {
+			return true
+		}
+		// 兼容旧数据 bcrypt(sha256(明文))
+		hash := sha256.Sum256([]byte(input))
+		return database.CheckPasswordHash(hex.EncodeToString(hash[:]), stored)
 	}
 	// 兼容明文
 	if stored == input {

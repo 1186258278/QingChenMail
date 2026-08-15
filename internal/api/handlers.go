@@ -306,7 +306,9 @@ func LoginHandler(c *gin.Context) {
 		captchaMutex.Unlock()
 
 		// 验证码过期检查 (使用常量时间比较防止时序攻击)
-		if !ok || subtle.ConstantTimeCompare([]byte(entry.Code), []byte(req.CaptchaCode)) != 1 || time.Now().After(entry.ExpiresAt) {
+		// 容忍用户输入前后的空白字符
+		captchaCode := strings.TrimSpace(req.CaptchaCode)
+		if !ok || subtle.ConstantTimeCompare([]byte(entry.Code), []byte(captchaCode)) != 1 || time.Now().After(entry.ExpiresAt) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired captcha code"})
 			return
 		}
@@ -329,15 +331,24 @@ func LoginHandler(c *gin.Context) {
 
 	passwordMatched := false
 	dbPass := user.Password
-	inputPass := req.Password // 前端可能会传明文，也可能传 SHA256 (取决于前端逻辑，旧版可能传了 Hash)
+	inputPass := req.Password // 前端发送明文密码 (统一协议)；旧版前端可能发送 SHA256
 
 	// 优先尝试 bcrypt 验证 (如果 dbPass 是 bcrypt hash)
 	if len(dbPass) >= 60 && strings.HasPrefix(dbPass, "$2a$") {
-		// 如果输入是 SHA256，先尝试直接匹配 (不推荐，但为了兼容)
-		// 实际上 bcrypt 应该验证明文。
-		// 这里假设 inputPass 是明文。如果前端已经 hash 了一次，那它就是“明文”
+		// 情况 1: dbPass = bcrypt(明文)，前端发明文 → 直接匹配
 		if database.CheckPasswordHash(inputPass, dbPass) {
 			passwordMatched = true
+		} else if !(len(inputPass) == 64 && isHex(inputPass)) {
+			// 情况 2: 兼容旧数据 dbPass = bcrypt(sha256(明文))
+			// 前端发明文时，计算 sha256(明文) 再与 bcrypt hash 比较
+			hash := sha256.Sum256([]byte(inputPass))
+			if database.CheckPasswordHash(hex.EncodeToString(hash[:]), dbPass) {
+				passwordMatched = true
+				// 自动升级为 bcrypt(明文)，逐步收敛密码格式
+				if newHash, err := database.HashPassword(inputPass); err == nil {
+					database.DB.Model(&user).Update("password", newHash)
+				}
+			}
 		}
 	} else {
 		// 兼容旧逻辑：明文或 SHA256
@@ -426,6 +437,12 @@ func ChangePasswordHandler(c *gin.Context) {
 	if len(user.Password) >= 60 && strings.HasPrefix(user.Password, "$2a$") {
 		if database.CheckPasswordHash(req.OldPassword, user.Password) {
 			oldPassMatched = true
+		} else {
+			// 兼容旧数据 bcrypt(sha256(明文))
+			hash := sha256.Sum256([]byte(req.OldPassword))
+			if database.CheckPasswordHash(hex.EncodeToString(hash[:]), user.Password) {
+				oldPassMatched = true
+			}
 		}
 	} else if user.Password == req.OldPassword { // 简单明文对比(为了兼容)
 		oldPassMatched = true
@@ -1287,12 +1304,12 @@ func BackupHandler(c *gin.Context) {
 // CaptchaHandler 生成验证码
 func CaptchaHandler(c *gin.Context) {
 	// 使用 crypto/rand 生成随机数字
-	// 为了简化，我们生成 4 字节的随机数然后取模
+	// 生成 1000-9999 的 4 位数字，避免前导零导致用户输入时漏掉 (如 "0123" 被输入成 "123")
 	b := make([]byte, 2)
 	rand.Read(b)
-	// 将字节转换为 uint16 (0-65535)，然后取模 10000
-	num := (int(b[0])<<8 | int(b[1])) % 10000
-	code := fmt.Sprintf("%04d", num)
+	// 将字节转换为 uint16 (0-65535)，映射到 1000-9999
+	num := 1000 + ((int(b[0])<<8 | int(b[1])) % 9000)
+	code := fmt.Sprintf("%d", num)
 
 	id := generateRandomKey() // 复用随机字符串生成
 
